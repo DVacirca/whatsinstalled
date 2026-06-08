@@ -761,26 +761,10 @@ func (m *model) startSearch() tea.Cmd {
 			cache := enrich.NewCache(db.GetEnrichmentCache())
 			e := enrich.NewEnricher(cache)
 
-			progress := make(chan enrich.Progress)
-			go func() {
-				for p := range progress {
-					// Send progress to UI
-					tea.Cmd(func() tea.Msg {
-						return enrichmentProgressMsg{
-							total:   p.Total,
-							done:    p.Done,
-							source:  p.Source,
-							current: p.Current,
-							desc:    p.Desc,
-						}
-					})()
-				}
-			}()
-
 			_, err := e.EnrichPackages(missing, func(total, done int, source, current, desc string) {
-				progress <- enrich.Progress{Total: total, Done: done, Source: source, Current: current, Desc: desc}
+				// Progress is reported but not sent to UI in this synchronous flow
+				// The UI shows "Enriching..." based on the state flag
 			})
-			close(progress)
 
 			if err != nil {
 				return enrichmentCompleteMsg{err: err}
