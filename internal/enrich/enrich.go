@@ -2,6 +2,8 @@ package enrich
 
 import (
 	"fmt"
+	"log"
+	"os"
 	"sync"
 
 	"installr/internal/store"
@@ -54,9 +56,11 @@ func (e *Enricher) EnrichPackages(pkgs []store.Package, onProgress ProgressCallb
 
 	// Track total and progress
 	total := 0
-	for _, group := range bySource {
+	for source, group := range bySource {
 		total += len(group)
+		log.Printf("[enrich] source=%s: %d packages need enrichment", source, len(group))
 	}
+	log.Printf("[enrich] total packages to enrich: %d", total)
 
 	done := 0
 	var mu sync.Mutex
@@ -78,22 +82,32 @@ func (e *Enricher) EnrichPackages(pkgs []store.Package, onProgress ProgressCallb
 		wg.Add(1)
 		go func(src string, pkgs []store.Package) {
 			defer wg.Done()
+			log.Printf("[enrich] starting %s enrichment (%d packages)", src, len(pkgs))
 			e.enrichSource(src, pkgs, results, &resultsMu, updateProgress)
+			log.Printf("[enrich] finished %s enrichment", src)
 		}(source, group)
 	}
 
 	wg.Wait()
 
-	// Apply descriptions back to packages
+	// Count how many descriptions we found
+	found := 0
 	for i := range pkgs {
 		p := pkgs[i]
 		key := fmt.Sprintf("%s:%s:%s", p.Name, p.Source, p.Location)
 		if desc, ok := results[key]; ok && desc != "" {
 			pkgs[i].Description = desc
+			found++
 		}
 	}
+	log.Printf("[enrich] found %d/%d descriptions", found, total)
 
 	return pkgs, nil
+}
+
+func init() {
+	log.SetOutput(os.Stderr)
+	log.SetFlags(log.Ltime | log.Lmicroseconds)
 }
 
 // enrichSource enriches packages for a single source.

@@ -3,6 +3,7 @@ package enrich
 import (
 	"bufio"
 	"bytes"
+	"log"
 	"os/exec"
 	"strings"
 	"sync"
@@ -27,8 +28,12 @@ func NewLocalEnricher() *LocalEnricher {
 func (le *LocalEnricher) EnrichBin(names []string) map[string]string {
 	results := make(map[string]string)
 
+	log.Printf("[enrich] EnrichBin: %d binaries to look up", len(names))
+
 	// First pass: whatis (bulk, fast)
+	log.Printf("[enrich] EnrichBin: running whatis for %d binaries", len(names))
 	whatisResults := le.whatisBatch(names)
+	log.Printf("[enrich] EnrichBin: whatis found %d descriptions", len(whatisResults))
 	for name, desc := range whatisResults {
 		if desc != "" {
 			results[name] = desc
@@ -44,7 +49,9 @@ func (le *LocalEnricher) EnrichBin(names []string) map[string]string {
 	}
 
 	if len(remaining) > 0 {
+		log.Printf("[enrich] EnrichBin: running dpkg -S for %d remaining binaries", len(remaining))
 		dpkgResults := le.dpkgBatch(remaining)
+		log.Printf("[enrich] EnrichBin: dpkg -S found %d descriptions", len(dpkgResults))
 		for name, desc := range dpkgResults {
 			if desc != "" {
 				results[name] = desc
@@ -52,6 +59,7 @@ func (le *LocalEnricher) EnrichBin(names []string) map[string]string {
 		}
 	}
 
+	log.Printf("[enrich] EnrichBin: total found %d/%d descriptions", len(results), len(names))
 	return results
 }
 

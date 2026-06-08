@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -750,60 +751,81 @@ func (m *model) startSearch() tea.Cmd {
 			return semanticSearchResult{results: nil}
 		}
 
+		fmt.Fprintf(os.Stderr, "\n[search] query: %q\n", query)
+
 		// Step 1: Check for missing descriptions
 		missing, err := db.ListWithoutDescriptions("")
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "[search] error listing missing descriptions: %v\n", err)
 			return scanErrorMsg{err: fmt.Errorf("list missing descriptions: %w", err)}
 		}
+		fmt.Fprintf(os.Stderr, "[search] packages missing descriptions: %d\n", len(missing))
 
 		// Step 2: Enrich if needed
 		if len(missing) > 0 {
+			fmt.Fprintf(os.Stderr, "[search] starting enrichment for %d packages\n", len(missing))
 			cache := enrich.NewCache(db.GetEnrichmentCache())
 			e := enrich.NewEnricher(cache)
 
+			start := time.Now()
 			_, err := e.EnrichPackages(missing, func(total, done int, source, current, desc string) {
-				// Progress is reported but not sent to UI in this synchronous flow
-				// The UI shows "Enriching..." based on the state flag
+				fmt.Fprintf(os.Stderr, "[search] enrichment [%d/%d] %s: %s -> %s\n", done, total, source, current, desc)
 			})
+			fmt.Fprintf(os.Stderr, "[search] enrichment completed in %v\n", time.Since(start))
 
 			if err != nil {
+				fmt.Fprintf(os.Stderr, "[search] enrichment error: %v\n", err)
 				return enrichmentCompleteMsg{err: err}
 			}
 
 			// Update descriptions in DB
+			fmt.Fprintf(os.Stderr, "[search] updating %d descriptions in DB\n", len(missing))
 			err = db.UpdateManyDescriptions(missing)
 			if err != nil {
+				fmt.Fprintf(os.Stderr, "[search] DB update error: %v\n", err)
 				return enrichmentCompleteMsg{err: err}
 			}
+			fmt.Fprintf(os.Stderr, "[search] DB updated\n")
+		} else {
+			fmt.Fprintf(os.Stderr, "[search] all packages have descriptions, skipping enrichment\n")
 		}
 
 		// Step 3: Run semantic search
+		fmt.Fprintf(os.Stderr, "[search] encoding query: %q\n", query)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
 		queryVec, err := embedder.Encode(ctx, query)
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "[search] error encoding query: %v\n", err)
 			return scanErrorMsg{err: fmt.Errorf("embed query: %w", err)}
 		}
+		fmt.Fprintf(os.Stderr, "[search] query encoded (%d dims)\n", len(queryVec))
 
 		pkgs, err := db.ListWithEmbeddings()
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "[search] error listing packages: %v\n", err)
 			return scanErrorMsg{err: fmt.Errorf("list packages: %w", err)}
 		}
+		fmt.Fprintf(os.Stderr, "[search] loaded %d packages\n", len(pkgs))
 
 		// Compute embeddings for any newly enriched packages
+		newEmbeddings := 0
 		for i, p := range pkgs {
 			if p.Embedding == "" {
 				text := nlp.PackageText(p.Name, p.Source, p.Description)
 				vec, err := embedder.Encode(ctx, text)
 				if err != nil {
+					fmt.Fprintf(os.Stderr, "[search] error embedding %s: %v\n", p.Name, err)
 					continue
 				}
 				jsonStr := nlp.ToJSON(vec)
 				_ = db.UpdateEmbedding(p.ID, jsonStr)
 				pkgs[i].Embedding = jsonStr
+				newEmbeddings++
 			}
 		}
+		fmt.Fprintf(os.Stderr, "[search] computed %d new embeddings\n", newEmbeddings)
 
 		// Score and rank
 		type scored struct {
@@ -821,6 +843,7 @@ func (m *model) startSearch() tea.Cmd {
 				results = append(results, scored{pkg: p, score: score})
 			}
 		}
+		fmt.Fprintf(os.Stderr, "[search] %d packages scored above 0.3\n", len(results))
 
 		// Sort by score descending
 		sort.Slice(results, func(i, j int) bool {
@@ -838,6 +861,7 @@ func (m *model) startSearch() tea.Cmd {
 			pkgsResult = append(pkgsResult, r.pkg)
 		}
 
+		fmt.Fprintf(os.Stderr, "[search] returning %d results\n\n", len(pkgsResult))
 		return semanticSearchResult{results: pkgsResult}
 	}
 }
