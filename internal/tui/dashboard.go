@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"time"
@@ -49,6 +48,10 @@ type model struct {
 	enrichSource    string
 	enrichCurrent   string
 	enrichDesc      string
+	enrichCh        chan enrichmentProgressMsg
+
+	// logs for the search modal
+	logs []string
 }
 
 type dataLoadedMsg struct {
@@ -70,11 +73,19 @@ type enrichmentProgressMsg struct {
 	source  string
 	current string
 	desc    string
+	log     string
+	isDone  bool
+	ch      chan enrichmentProgressMsg // channel to poll from
 }
 
 // enrichmentCompleteMsg is sent when enrichment finishes.
 type enrichmentCompleteMsg struct {
 	err error
+}
+
+// logMsg is sent to append a log line in the UI.
+type logMsg struct {
+	line string
 }
 
 func NewModel(s *store.Store) *model {
@@ -308,10 +319,30 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.enrichSource = msg.source
 		m.enrichCurrent = msg.current
 		m.enrichDesc = msg.desc
-		return m, nil
+		if msg.log != "" {
+			m.logs = append(m.logs, msg.log)
+			if len(m.logs) > 20 {
+				m.logs = m.logs[len(m.logs)-20:]
+			}
+		}
+		if msg.ch != nil {
+			m.enrichCh = msg.ch
+			m.enriching = true
+		}
+		if !msg.isDone && m.enrichCh != nil {
+			return m, pollProgressCmd(m.enrichCh)
+		}
+		if msg.isDone {
+			m.enriching = false
+			m.enrichCh = nil
+			// Continue to search after enrichment
+			cmds = append(cmds, m.startSearch())
+		}
+		return m, tea.Batch(cmds...)
 
 	case enrichmentCompleteMsg:
 		m.enriching = false
+		m.enrichCh = nil
 		if msg.err != nil {
 			m.scanErr = msg.err
 		}
@@ -449,7 +480,29 @@ func (m *model) View() string {
 	if m.mode == "search" {
 		modalWidth := min(60, m.width-4)
 		var modalContent string
-		if m.searching {
+		if m.enriching {
+			// Build log panel
+			var logLines []string
+			logLines = append(logLines, modalTitleStyle.Render(" Ask installr "))
+			logLines = append(logLines, "")
+			progressText := fmt.Sprintf("⟳  Enriching %d/%d packages...", m.enrichDone, m.enrichTotal)
+			logLines = append(logLines, lipgloss.NewStyle().Foreground(accent).Render(progressText))
+			if m.enrichCurrent != "" {
+				logLines = append(logLines, lipgloss.NewStyle().Foreground(fg).Render(fmt.Sprintf("  %s: %s", m.enrichSource, m.enrichCurrent)))
+			}
+			logLines = append(logLines, "")
+			// Show recent logs
+			startIdx := 0
+			if len(m.logs) > 10 {
+				startIdx = len(m.logs) - 10
+			}
+			for i := startIdx; i < len(m.logs); i++ {
+				logLines = append(logLines, lipgloss.NewStyle().Foreground(fg).Render(m.logs[i]))
+			}
+			logLines = append(logLines, "")
+			logLines = append(logLines, lipgloss.NewStyle().Foreground(fg).Render("Press Esc to cancel"))
+			modalContent = lipgloss.JoinVertical(lipgloss.Left, logLines...)
+		} else if m.searching {
 			modalContent = lipgloss.JoinVertical(lipgloss.Left,
 				modalTitleStyle.Render(" Ask installr "),
 				"",
@@ -751,118 +804,160 @@ func (m *model) startSearch() tea.Cmd {
 			return semanticSearchResult{results: nil}
 		}
 
-		fmt.Fprintf(os.Stderr, "\n[search] query: %q\n", query)
-
 		// Step 1: Check for missing descriptions
 		missing, err := db.ListWithoutDescriptions("")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "[search] error listing missing descriptions: %v\n", err)
 			return scanErrorMsg{err: fmt.Errorf("list missing descriptions: %w", err)}
 		}
-		fmt.Fprintf(os.Stderr, "[search] packages missing descriptions: %d\n", len(missing))
 
 		// Step 2: Enrich if needed
 		if len(missing) > 0 {
-			fmt.Fprintf(os.Stderr, "[search] starting enrichment for %d packages\n", len(missing))
-			cache := enrich.NewCache(db.GetEnrichmentCache())
-			e := enrich.NewEnricher(cache)
+			// Create a channel for progress updates
+			ch := make(chan enrichmentProgressMsg, 100)
 
-			start := time.Now()
-			_, err := e.EnrichPackages(missing, func(total, done int, source, current, desc string) {
-				fmt.Fprintf(os.Stderr, "[search] enrichment [%d/%d] %s: %s -> %s\n", done, total, source, current, desc)
-			})
-			fmt.Fprintf(os.Stderr, "[search] enrichment completed in %v\n", time.Since(start))
+			// Start enrichment in a goroutine
+			go func(totalMissing int) {
+				defer close(ch)
 
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "[search] enrichment error: %v\n", err)
-				return enrichmentCompleteMsg{err: err}
-			}
+				cache := enrich.NewCache(db.GetEnrichmentCache())
+				e := enrich.NewEnricher(cache)
 
-			// Update descriptions in DB
-			fmt.Fprintf(os.Stderr, "[search] updating %d descriptions in DB\n", len(missing))
-			err = db.UpdateManyDescriptions(missing)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "[search] DB update error: %v\n", err)
-				return enrichmentCompleteMsg{err: err}
-			}
-			fmt.Fprintf(os.Stderr, "[search] DB updated\n")
-		} else {
-			fmt.Fprintf(os.Stderr, "[search] all packages have descriptions, skipping enrichment\n")
-		}
-
-		// Step 3: Run semantic search
-		fmt.Fprintf(os.Stderr, "[search] encoding query: %q\n", query)
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		queryVec, err := embedder.Encode(ctx, query)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "[search] error encoding query: %v\n", err)
-			return scanErrorMsg{err: fmt.Errorf("embed query: %w", err)}
-		}
-		fmt.Fprintf(os.Stderr, "[search] query encoded (%d dims)\n", len(queryVec))
-
-		pkgs, err := db.ListWithEmbeddings()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "[search] error listing packages: %v\n", err)
-			return scanErrorMsg{err: fmt.Errorf("list packages: %w", err)}
-		}
-		fmt.Fprintf(os.Stderr, "[search] loaded %d packages\n", len(pkgs))
-
-		// Compute embeddings for any newly enriched packages
-		newEmbeddings := 0
-		for i, p := range pkgs {
-			if p.Embedding == "" {
-				text := nlp.PackageText(p.Name, p.Source, p.Description)
-				vec, err := embedder.Encode(ctx, text)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "[search] error embedding %s: %v\n", p.Name, err)
-					continue
+				// Send initial progress
+				ch <- enrichmentProgressMsg{
+					total: totalMissing,
+					log:   fmt.Sprintf("Found %d packages missing descriptions", totalMissing),
 				}
-				jsonStr := nlp.ToJSON(vec)
-				_ = db.UpdateEmbedding(p.ID, jsonStr)
-				pkgs[i].Embedding = jsonStr
-				newEmbeddings++
+
+				totalDone := 0
+				_, err := e.EnrichPackages(missing, func(total, done int, source, current, desc string) {
+					ch <- enrichmentProgressMsg{
+						total:   total,
+						done:    done,
+						source:  source,
+						current: current,
+						desc:    desc,
+						log:     fmt.Sprintf("[%s] %s", source, current),
+					}
+					totalDone = done
+				})
+
+				if err != nil {
+					ch <- enrichmentProgressMsg{
+						isDone: true,
+						log:    fmt.Sprintf("Enrichment error: %v", err),
+					}
+					return
+				}
+
+				ch <- enrichmentProgressMsg{
+					done:   totalDone,
+					log:    "Updating descriptions in database...",
+					isDone: true,
+				}
+
+				// Update descriptions in DB
+				err = db.UpdateManyDescriptions(missing)
+				if err != nil {
+					ch <- enrichmentProgressMsg{
+						isDone: true,
+						log:    fmt.Sprintf("DB update error: %v", err),
+					}
+					return
+				}
+
+				ch <- enrichmentProgressMsg{
+					isDone: true,
+					log:    "Descriptions updated. Starting search...",
+				}
+			}(len(missing))
+
+			// Return a progress message to start polling
+			return enrichmentProgressMsg{
+				isDone: false,
+				log:    "Starting enrichment...",
+				ch:     ch,
 			}
 		}
-		fmt.Fprintf(os.Stderr, "[search] computed %d new embeddings\n", newEmbeddings)
 
-		// Score and rank
-		type scored struct {
-			pkg   store.Package
-			score float64
-		}
-		var results []scored
-		for _, p := range pkgs {
-			vec, err := nlp.FromJSON(p.Embedding)
+		// Step 3: Run semantic search (no enrichment needed)
+		return m.runSemanticSearch(query, embedder, db)
+	}
+}
+
+// runSemanticSearch performs the actual semantic search.
+func (m *model) runSemanticSearch(query string, embedder *nlp.Embedder, db *store.Store) tea.Msg {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	queryVec, err := embedder.Encode(ctx, query)
+	if err != nil {
+		return scanErrorMsg{err: fmt.Errorf("embed query: %w", err)}
+	}
+
+	pkgs, err := db.ListWithEmbeddings()
+	if err != nil {
+		return scanErrorMsg{err: fmt.Errorf("list packages: %w", err)}
+	}
+
+	// Compute embeddings for any newly enriched packages
+	for i, p := range pkgs {
+		if p.Embedding == "" {
+			text := nlp.PackageText(p.Name, p.Source, p.Description)
+			vec, err := embedder.Encode(ctx, text)
 			if err != nil {
 				continue
 			}
-			score := nlp.CosineSimilarity(queryVec, vec)
-			if score > 0.3 {
-				results = append(results, scored{pkg: p, score: score})
-			}
+			jsonStr := nlp.ToJSON(vec)
+			_ = db.UpdateEmbedding(p.ID, jsonStr)
+			pkgs[i].Embedding = jsonStr
 		}
-		fmt.Fprintf(os.Stderr, "[search] %d packages scored above 0.3\n", len(results))
+	}
 
-		// Sort by score descending
-		sort.Slice(results, func(i, j int) bool {
-			return results[i].score > results[j].score
-		})
-
-		// Take top 20
-		maxResults := 20
-		if len(results) > maxResults {
-			results = results[:maxResults]
+	// Score and rank
+	type scored struct {
+		pkg   store.Package
+		score float64
+	}
+	var results []scored
+	for _, p := range pkgs {
+		vec, err := nlp.FromJSON(p.Embedding)
+		if err != nil {
+			continue
 		}
-
-		var pkgsResult []store.Package
-		for _, r := range results {
-			pkgsResult = append(pkgsResult, r.pkg)
+		score := nlp.CosineSimilarity(queryVec, vec)
+		if score > 0.3 {
+			results = append(results, scored{pkg: p, score: score})
 		}
+	}
 
-		fmt.Fprintf(os.Stderr, "[search] returning %d results\n\n", len(pkgsResult))
-		return semanticSearchResult{results: pkgsResult}
+	// Sort by score descending
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].score > results[j].score
+	})
+
+	// Take top 20
+	maxResults := 20
+	if len(results) > maxResults {
+		results = results[:maxResults]
+	}
+
+	var pkgsResult []store.Package
+	for _, r := range results {
+		pkgsResult = append(pkgsResult, r.pkg)
+	}
+
+	return semanticSearchResult{results: pkgsResult}
+}
+
+// pollProgressCmd returns a tea.Cmd that polls the channel for progress.
+func pollProgressCmd(ch chan enrichmentProgressMsg) tea.Cmd {
+	return func() tea.Msg {
+		msg, ok := <-ch
+		if !ok {
+			// Channel closed, enrichment is done
+			return enrichmentCompleteMsg{}
+		}
+		return msg
 	}
 }
 
