@@ -239,6 +239,9 @@ func (s *Store) ListWithEmbeddings() ([]Package, error) {
 		}
 		p.AutoInstalled = auto != 0
 		p.UpdatedAt = time.UnixMilli(updated)
+		if embedding.Valid {
+			p.Embedding = embedding.String
+		}
 		pkgs = append(pkgs, p)
 	}
 	return pkgs, rows.Err()
