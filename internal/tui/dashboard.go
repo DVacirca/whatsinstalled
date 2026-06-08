@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"installr/internal/enrich"
 	"installr/internal/nlp"
 	"installr/internal/scanner"
 	"installr/internal/store"
@@ -29,7 +30,7 @@ type model struct {
 	packages        []store.Package
 	counts          map[string]int
 	total           int
-	mode            string // "" | "detail" | "confirm" | "install" | "search"
+	mode            string // "" | "detail" | "confirm" | "install" | "search" | "enriching"
 	installPkg      string
 	installSource   string
 	installLocation string
@@ -39,6 +40,14 @@ type model struct {
 	scanning        bool
 	scanErr         error
 	err             error
+
+	// enrichment state
+	enriching       bool
+	enrichTotal     int
+	enrichDone      int
+	enrichSource    string
+	enrichCurrent   string
+	enrichDesc      string
 }
 
 type dataLoadedMsg struct {
@@ -52,6 +61,20 @@ type scanErrorMsg struct{ err error }
 type uninstallCompleteMsg struct{ err error }
 type installCompleteMsg struct{ err error }
 type semanticSearchResult struct{ results []store.Package }
+
+// enrichmentProgressMsg is sent during enrichment to update the UI.
+type enrichmentProgressMsg struct {
+	total   int
+	done    int
+	source  string
+	current string
+	desc    string
+}
+
+// enrichmentCompleteMsg is sent when enrichment finishes.
+type enrichmentCompleteMsg struct {
+	err error
+}
 
 func NewModel(s *store.Store) *model {
 	m := &model{
@@ -269,6 +292,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case semanticSearchResult:
 		m.searching = false
+		m.enriching = false
 		m.semanticResults = msg.results
 		m.tree.buildTree(msg.results)
 		m.mode = ""
@@ -276,6 +300,22 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(msg.results) == 0 {
 			m.scanErr = fmt.Errorf("no results found")
 		}
+
+	case enrichmentProgressMsg:
+		m.enrichTotal = msg.total
+		m.enrichDone = msg.done
+		m.enrichSource = msg.source
+		m.enrichCurrent = msg.current
+		m.enrichDesc = msg.desc
+		return m, nil
+
+	case enrichmentCompleteMsg:
+		m.enriching = false
+		if msg.err != nil {
+			m.scanErr = msg.err
+		}
+		// Continue to search after enrichment
+		cmds = append(cmds, m.startSearch())
 	}
 
 	return m, tea.Batch(cmds...)
@@ -324,7 +364,17 @@ func (m *model) View() string {
 
 	// ── Tree content ──
 	var treeContent string
-	if m.searching {
+	if m.enriching {
+		progressText := fmt.Sprintf("  ⟳ Enriching %d/%d packages", m.enrichDone, m.enrichTotal)
+		if m.enrichCurrent != "" {
+			progressText += fmt.Sprintf(" (%s: %s)", m.enrichSource, m.enrichCurrent)
+		}
+		treeContent = lipgloss.NewStyle().Foreground(accent).Render(progressText)
+		linesNeeded := treeContentH - 1
+		if linesNeeded > 0 {
+			treeContent += strings.Repeat("\n"+strings.Repeat(" ", sepWidth), linesNeeded)
+		}
+	} else if m.searching {
 		treeContent = lipgloss.NewStyle().Foreground(accent).Render("  ⟳ Searching...")
 		// Pad remaining height
 		linesNeeded := treeContentH - 1
@@ -689,8 +739,7 @@ func (m *model) doInstall() tea.Msg {
 	})
 }
 
-// startSearch returns a tea.Cmd that runs the semantic search in the
-// background and sends the result back as a message.
+// startSearch returns a tea.Cmd that checks for missing descriptions, enriches them, then runs the search.
 func (m *model) startSearch() tea.Cmd {
 	query := m.semanticQuery
 	embedder := m.embedder
@@ -701,6 +750,50 @@ func (m *model) startSearch() tea.Cmd {
 			return semanticSearchResult{results: nil}
 		}
 
+		// Step 1: Check for missing descriptions
+		missing, err := db.ListWithoutDescriptions("")
+		if err != nil {
+			return scanErrorMsg{err: fmt.Errorf("list missing descriptions: %w", err)}
+		}
+
+		// Step 2: Enrich if needed
+		if len(missing) > 0 {
+			cache := enrich.NewCache(db.GetEnrichmentCache())
+			e := enrich.NewEnricher(cache)
+
+			progress := make(chan enrich.Progress)
+			go func() {
+				for p := range progress {
+					// Send progress to UI
+					tea.Cmd(func() tea.Msg {
+						return enrichmentProgressMsg{
+							total:   p.Total,
+							done:    p.Done,
+							source:  p.Source,
+							current: p.Current,
+							desc:    p.Desc,
+						}
+					})()
+				}
+			}()
+
+			_, err := e.EnrichPackages(missing, func(total, done int, source, current, desc string) {
+				progress <- enrich.Progress{Total: total, Done: done, Source: source, Current: current, Desc: desc}
+			})
+			close(progress)
+
+			if err != nil {
+				return enrichmentCompleteMsg{err: err}
+			}
+
+			// Update descriptions in DB
+			err = db.UpdateManyDescriptions(missing)
+			if err != nil {
+				return enrichmentCompleteMsg{err: err}
+			}
+		}
+
+		// Step 3: Run semantic search
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
@@ -709,13 +802,12 @@ func (m *model) startSearch() tea.Cmd {
 			return scanErrorMsg{err: fmt.Errorf("embed query: %w", err)}
 		}
 
-		// Get all packages with embeddings
 		pkgs, err := db.ListWithEmbeddings()
 		if err != nil {
 			return scanErrorMsg{err: fmt.Errorf("list packages: %w", err)}
 		}
 
-		// Ensure embeddings are cached
+		// Compute embeddings for any newly enriched packages
 		for i, p := range pkgs {
 			if p.Embedding == "" {
 				text := nlp.PackageText(p.Name, p.Source, p.Description)
@@ -741,7 +833,7 @@ func (m *model) startSearch() tea.Cmd {
 				continue
 			}
 			score := nlp.CosineSimilarity(queryVec, vec)
-			if score > 0.3 { // threshold to filter noise
+			if score > 0.3 {
 				results = append(results, scored{pkg: p, score: score})
 			}
 		}

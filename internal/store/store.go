@@ -80,6 +80,17 @@ func migrate(db *sql.DB) error {
 	_, _ = db.Exec(`ALTER TABLE packages ADD COLUMN user TEXT`)
 	_, _ = db.Exec(`ALTER TABLE packages ADD COLUMN last_used INTEGER`)
 	_, _ = db.Exec(`ALTER TABLE packages ADD COLUMN embedding TEXT`)
+
+	// Enrichment cache table for API responses
+	_, _ = db.Exec(`
+		CREATE TABLE IF NOT EXISTS enrichment_cache (
+			name TEXT NOT NULL,
+			source TEXT NOT NULL,
+			description TEXT NOT NULL,
+			fetched_at INTEGER NOT NULL,
+			PRIMARY KEY (name, source)
+		);
+	`)
 	return nil
 }
 
@@ -231,6 +242,65 @@ func (s *Store) ListWithEmbeddings() ([]Package, error) {
 		pkgs = append(pkgs, p)
 	}
 	return pkgs, rows.Err()
+}
+
+// ListWithoutDescriptions returns packages that have no description.
+func (s *Store) ListWithoutDescriptions(sourceFilter string) ([]Package, error) {
+	var rows *sql.Rows
+	var err error
+	if sourceFilter == "" {
+		rows, err = s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used FROM packages WHERE description IS NULL OR description = '' ORDER BY name COLLATE NOCASE`)
+	} else {
+		rows, err = s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used FROM packages WHERE (description IS NULL OR description = '') AND source = ? ORDER BY name COLLATE NOCASE`, sourceFilter)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("list without descriptions: %w", err)
+	}
+	defer rows.Close()
+	return scanRows(rows)
+}
+
+// UpdateDescription updates the description for a single package.
+func (s *Store) UpdateDescription(id int64, description string) error {
+	_, err := s.db.Exec(`UPDATE packages SET description = ? WHERE id = ?`, description, id)
+	return err
+}
+
+// UpdateManyDescriptions updates descriptions for multiple packages in a single transaction.
+func (s *Store) UpdateManyDescriptions(pkgs []Package) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`UPDATE packages SET description = ? WHERE id = ?`)
+	if err != nil {
+		return fmt.Errorf("prepare stmt: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, p := range pkgs {
+		if p.Description == "" {
+			continue
+		}
+		if _, err := stmt.Exec(p.Description, p.ID); err != nil {
+			return fmt.Errorf("update desc %s: %w", p.Name, err)
+		}
+	}
+	return tx.Commit()
+}
+
+// CountWithoutDescriptions returns the number of packages missing descriptions.
+func (s *Store) CountWithoutDescriptions() (int, error) {
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM packages WHERE description IS NULL OR description = ''`).Scan(&count)
+	return count, err
+}
+
+// GetEnrichmentCache returns the underlying database connection for the enrichment cache.
+func (s *Store) GetEnrichmentCache() *sql.DB {
+	return s.db
 }
 
 func scanRows(rows *sql.Rows) ([]Package, error) {
