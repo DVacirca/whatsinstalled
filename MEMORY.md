@@ -71,3 +71,50 @@
 - **TUI uninstall was broken**: `cmd.Run()` in a goroutine corrupts the alternate screen buffer and breaks sudo password prompts.
 - **Fix**: Use `tea.ExecProcess(cmd, callback)` which suspends the TUI, runs the command in the foreground, and resumes after completion. This is the correct pattern for any command that needs TTY access (sudo, apt, etc.).
 - **InstallCmd / UninstallCmd**: The Scanner interface returns `*exec.Cmd` instead of running it directly. The TUI passes this to `tea.ExecProcess`, while the CLI uses `.Run()` directly.
+
+## Session: Search Enrichment Implementation
+
+### Search Strategy
+- **Hybrid semantic search**: BERT embeddings (sentence-transformers/all-MiniLM-L6-v2) for natural language queries + lazy enrichment for missing descriptions.
+- **Two modes**: `/` for fast substring filter (current tab), `?` for semantic search (all packages).
+- **Lazy enrichment**: Only enrich descriptions when a search is triggered, not during scan. This keeps the initial scan fast (~2-3s) while making search work well.
+
+### Enrichment Sources (local-first priority)
+- **bin packages**: `whatis` (bulk, 0.1s for 7,720 entries) → `dpkg -S` (maps `/usr/bin/{name}` to apt package → apt description).
+- **pip packages**: `pip show` (batch, ~7s for 93 packages) → PyPI API fallback.
+- **npm packages**: `npm info --json` (local, ~1s for 14 packages) → npm registry fallback.
+- **Remote APIs**: PyPI (`pypi.org/pypi/{name}/json`) and npm registry (`registry.npmjs.org/{name}`). 100ms delay between requests to be polite. 30-day cache TTL.
+
+### Enrichment Cache
+- **SQLite table**: `enrichment_cache(name, source, description, fetched_at)` with 30-day TTL.
+- **Purpose**: Avoids repeated API calls. Before any HTTP request, check cache. If cache hit and < 30 days old, use cached description.
+- **Store methods**: `ListWithoutDescriptions()`, `UpdateManyDescriptions()` (batch update in single transaction).
+
+### UI Progress Reporting
+- **Channel-based**: `startSearch()` creates a goroutine for enrichment and sends `enrichmentProgressMsg` through a channel. `pollProgressCmd()` reads from the channel and returns messages to the `Update` loop.
+- **Modal display**: Search modal shows real-time progress: "Enriching 45/253 packages..." with live log lines showing each package being processed.
+- **State flags**: `m.enriching` (shows enrichment UI), `m.searching` (shows searching UI), `m.logs` (stores last 20 log lines).
+
+### UI Freezing Fix
+- **Root cause**: `pollProgressCmd` blocked forever on the channel if the goroutine hung or crashed. The UI froze because Bubble Tea's `Update` loop never received the completion message.
+- **Fix**: Added `select` with 5-second timeout in `pollProgressCmd`. If channel blocks longer than 5s, returns `enrichmentCompleteMsg{err: timeout}`.
+- **State cleanup**: Escape key in search mode now clears `m.enriching = false`, `m.enrichCh = nil`, `m.logs = nil` to prevent stuck state.
+
+### Logging to stderr breaks TUI
+- **Issue**: `fmt.Fprintf(os.Stderr, ...)` and `log.Printf` in enrich code wrote raw text to stderr, which corrupted the alternate screen buffer (TUI display).
+- **Fix**: Removed all stderr logging. Progress is reported through the Bubble Tea message channel instead. The only logs are the ones displayed in the search modal UI.
+
+### Current Enrichment State
+- **Total packages**: 3,859
+- **With descriptions**: 3,606 (93.4%)
+- **Missing**: 253 (6.6%) — mostly system binaries without man pages or custom tools
+- **Coverage**: apt/snap/conda = 100%, pip = 97.8%, npm = 78.6%, bin = 89.3%
+
+### Commits
+1. `baseline before search enrichment` — original state
+2. `add lazy enrichment with caching for semantic search` — core enrichment package
+3. `fix progress reporting in search flow` — Bubble Tea state handling
+4. `fix embedding retrieval and add enrichment tests` — bug fix + 700 lines of tests
+5. `add integration tests for enrichment with real data` — verified with production DB
+6. `add logging to enrichment and search flow` — removed stderr, added UI logs
+7. `fix ui freezing during search by adding timeout and proper state transitions` — frozen UI fix
