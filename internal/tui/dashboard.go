@@ -177,11 +177,16 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.mode = ""
 				m.semanticQuery = ""
 				m.searching = false
+				m.enriching = false
+				m.enrichCh = nil
+				m.logs = nil
 				m.semanticResults = nil
 				cmds = append(cmds, m.loadData)
 				return m, tea.Batch(cmds...)
 			case "enter":
 				m.searching = true
+				m.enriching = true
+				m.logs = []string{"Starting search..."}
 				cmds = append(cmds, m.startSearch())
 				return m, tea.Batch(cmds...)
 			case "backspace":
@@ -328,6 +333,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.ch != nil {
 			m.enrichCh = msg.ch
 			m.enriching = true
+			m.searching = true
 		}
 		if !msg.isDone && m.enrichCh != nil {
 			return m, pollProgressCmd(m.enrichCh)
@@ -335,6 +341,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.isDone {
 			m.enriching = false
 			m.enrichCh = nil
+			m.searching = true
 			// Continue to search after enrichment
 			cmds = append(cmds, m.startSearch())
 		}
@@ -346,8 +353,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.scanErr = msg.err
 		}
-		// Continue to search after enrichment
-		cmds = append(cmds, m.startSearch())
+		// Note: search is already started by enrichmentProgressMsg when isDone
 	}
 
 	return m, tea.Batch(cmds...)
@@ -952,12 +958,17 @@ func (m *model) runSemanticSearch(query string, embedder *nlp.Embedder, db *stor
 // pollProgressCmd returns a tea.Cmd that polls the channel for progress.
 func pollProgressCmd(ch chan enrichmentProgressMsg) tea.Cmd {
 	return func() tea.Msg {
-		msg, ok := <-ch
-		if !ok {
-			// Channel closed, enrichment is done
-			return enrichmentCompleteMsg{}
+		select {
+		case msg, ok := <-ch:
+			if !ok {
+				// Channel closed, enrichment is done
+				return enrichmentCompleteMsg{}
+			}
+			return msg
+		case <-time.After(5 * time.Second):
+			// Timeout to prevent UI from freezing
+			return enrichmentCompleteMsg{err: fmt.Errorf("enrichment timeout")}
 		}
-		return msg
 	}
 }
 
