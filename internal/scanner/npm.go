@@ -26,7 +26,12 @@ func npmGlobalDir() string {
 // NpmScanner scans top-level npm packages only (global + local projects).
 type NpmScanner struct{}
 
-func (NpmScanner) Name() string { return "npm" }
+func (NpmScanner) Name() string      { return "npm" }
+func (NpmScanner) IsAvailable() bool { return commandExists("npm") }
+func (s NpmScanner) Probe() bool {
+	out, _ := exec.Command("npm", "list", "-g", "--depth=0", "--json").Output()
+	return len(out) > 10 // minimal JSON object
+}
 
 func (s NpmScanner) Scan() ([]store.Package, error) {
 	var pkgs []store.Package
@@ -114,6 +119,18 @@ func (s NpmScanner) scanLocation(location, dir string, global bool) ([]store.Pac
 		if info.Description != "" {
 			p.Description = info.Description
 		}
+		// Fallback: read package.json from node_modules
+		if p.Description == "" {
+			var pkgDir string
+			if global {
+				pkgDir = filepath.Join(npmGlobalDir(), name)
+			} else if dir != "" {
+				pkgDir = filepath.Join(dir, "node_modules", name)
+			}
+			if pkgDir != "" {
+				p.Description = s.readPackageJSONDesc(pkgDir)
+			}
+		}
 		// Determine package directory for last-used
 		var pkgDir string
 		if global {
@@ -163,6 +180,24 @@ func (s NpmScanner) InstallCmd(name, location string) *exec.Cmd {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd
+}
+
+// readPackageJSONDesc reads the "description" field from a package's package.json.
+func (s NpmScanner) readPackageJSONDesc(pkgDir string) string {
+	path := filepath.Join(pkgDir, "package.json")
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	var data struct {
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(f).Decode(&data); err != nil {
+		return ""
+	}
+	return data.Description
 }
 
 type npmListRoot struct {

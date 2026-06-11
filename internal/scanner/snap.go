@@ -15,7 +15,13 @@ import (
 // SnapScanner scans snap packages.
 type SnapScanner struct{}
 
-func (SnapScanner) Name() string { return "snap" }
+func (SnapScanner) Name() string      { return "snap" }
+func (SnapScanner) IsAvailable() bool { return commandExists("snap") }
+func (s SnapScanner) Probe() bool {
+	out, _ := exec.Command("snap", "list").Output()
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	return len(lines) > 1 // header + at least one package
+}
 
 func (s SnapScanner) Scan() ([]store.Package, error) {
 	cmd := exec.Command("snap", "list")

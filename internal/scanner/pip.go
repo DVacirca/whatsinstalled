@@ -1,6 +1,9 @@
 package scanner
 
 import (
+	"bufio"
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -16,7 +19,12 @@ import (
 // PipScanner scans top-level pip packages (global + local venvs).
 type PipScanner struct{}
 
-func (PipScanner) Name() string { return "pip" }
+func (PipScanner) Name() string      { return "pip" }
+func (PipScanner) IsAvailable() bool { return commandExists("pip") || commandExists("pip3") }
+func (s PipScanner) Probe() bool {
+	out, _ := exec.Command("pip", "list", "--format=json").Output()
+	return len(out) > 10
+}
 
 func (s PipScanner) Scan() ([]store.Package, error) {
 	var pkgs []store.Package
@@ -84,6 +92,9 @@ func (s PipScanner) scanWithPip(pipBin, location string) ([]store.Package, error
 		return nil, fmt.Errorf("parse pip list: %w", err)
 	}
 
+	// Fetch descriptions in one bulk pip show call
+	descMap := s.pipShowDescriptions(pipBin, raw)
+
 	owner := "system"
 	if location != "system" {
 		owner = pkg.FileOwner(location)
@@ -91,12 +102,13 @@ func (s PipScanner) scanWithPip(pipBin, location string) ([]store.Package, error
 	var pkgs []store.Package
 	for _, r := range raw {
 		p := store.Package{
-			Name:      r.Name,
-			Version:   r.Version,
-			Source:    "pip",
-			Location:  location,
-			UpdatedAt: time.Now(),
-			User:      owner,
+			Name:        r.Name,
+			Version:     r.Version,
+			Source:      "pip",
+			Location:    location,
+			UpdatedAt:   time.Now(),
+			User:        owner,
+			Description: descMap[r.Name],
 		}
 		// Determine package directory for last-used
 		var pkgDir string
@@ -125,6 +137,51 @@ func (s PipScanner) scanWithPip(pipBin, location string) ([]store.Package, error
 		pkgs = append(pkgs, p)
 	}
 	return pkgs, nil
+}
+
+// pipShowDescriptions runs pip show for all packages and extracts Summary fields.
+func (s PipScanner) pipShowDescriptions(pipBin string, raw []struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}) map[string]string {
+	descMap := make(map[string]string)
+	if len(raw) == 0 {
+		return descMap
+	}
+
+	names := make([]string, len(raw))
+	for i, r := range raw {
+		names[i] = r.Name
+	}
+
+	args := append([]string{"show"}, names...)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, pipBin, args...)
+	out, err := cmd.Output()
+	if err != nil {
+		return descMap
+	}
+
+	var currentName, currentDesc string
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "Name: ") {
+			if currentName != "" && currentDesc != "" {
+				descMap[currentName] = currentDesc
+			}
+			currentName = strings.TrimSpace(strings.TrimPrefix(line, "Name: "))
+			currentDesc = ""
+		} else if strings.HasPrefix(line, "Summary: ") {
+			currentDesc = strings.TrimSpace(strings.TrimPrefix(line, "Summary: "))
+		}
+	}
+	if currentName != "" && currentDesc != "" {
+		descMap[currentName] = currentDesc
+	}
+
+	return descMap
 }
 
 func (s PipScanner) Uninstall(name, location string) error {

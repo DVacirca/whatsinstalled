@@ -1,8 +1,10 @@
 package scanner
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,7 +18,12 @@ import (
 // CondaScanner scans conda environments and their packages.
 type CondaScanner struct{}
 
-func (CondaScanner) Name() string { return "conda" }
+func (CondaScanner) Name() string      { return "conda" }
+func (CondaScanner) IsAvailable() bool { return commandExists("conda") }
+func (s CondaScanner) Probe() bool {
+	out, _ := exec.Command("conda", "env", "list", "--json").Output()
+	return len(out) > 50 // minimal JSON with envs array
+}
 
 func (s CondaScanner) Scan() ([]store.Package, error) {
 	var pkgs []store.Package
@@ -82,6 +89,18 @@ func (s CondaScanner) scanEnv(envPath string) ([]store.Package, error) {
 	// Get owner of the env directory
 	owner := pkg.FileOwner(envPath)
 
+	// Try to find the python site-packages dir once
+	var sitePkgDir string
+	libDir := filepath.Join(envPath, "lib")
+	if entries, err := os.ReadDir(libDir); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() && strings.HasPrefix(entry.Name(), "python3") {
+				sitePkgDir = filepath.Join(libDir, entry.Name(), "site-packages")
+				break
+			}
+		}
+	}
+
 	var pkgs []store.Package
 	for _, r := range raw {
 		p := store.Package{
@@ -92,19 +111,19 @@ func (s CondaScanner) scanEnv(envPath string) ([]store.Package, error) {
 			UpdatedAt: time.Now(),
 			User:      owner,
 		}
-		if r.Channel != "" {
+
+		// Try METADATA file for description
+		if sitePkgDir != "" {
+			p.Description = s.readCondaMetadata(sitePkgDir, r.Name)
+		}
+		if p.Description == "" && r.Channel != "" {
 			p.Description = fmt.Sprintf("channel: %s", r.Channel)
 		}
+
 		// Determine package directory for last-used
 		var pkgDir string
-		libDir := filepath.Join(envPath, "lib")
-		if entries, err := os.ReadDir(libDir); err == nil {
-			for _, entry := range entries {
-				if entry.IsDir() && strings.HasPrefix(entry.Name(), "python3") {
-					pkgDir = filepath.Join(libDir, entry.Name(), "site-packages", r.Name)
-					break
-				}
-			}
+		if sitePkgDir != "" {
+			pkgDir = filepath.Join(sitePkgDir, r.Name)
 		}
 		if pkgDir == "" {
 			pkgDir = filepath.Join(envPath, "pkgs", r.Name+"-"+r.Version)
@@ -115,6 +134,47 @@ func (s CondaScanner) scanEnv(envPath string) ([]store.Package, error) {
 		pkgs = append(pkgs, p)
 	}
 	return pkgs, nil
+}
+
+// readCondaMetadata reads the Summary line from a conda package's METADATA file.
+func (s CondaScanner) readCondaMetadata(sitePkgDir, pkgName string) string {
+	// Look for <name>-<version>.dist-info/METADATA
+	entries, err := os.ReadDir(sitePkgDir)
+	if err != nil {
+		return ""
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasPrefix(name, pkgName) || !strings.HasSuffix(name, ".dist-info") {
+			continue
+		}
+		metaPath := filepath.Join(sitePkgDir, name, "METADATA")
+		f, err := os.Open(metaPath)
+		if err != nil {
+			continue
+		}
+		desc := s.parseMetadataSummary(f)
+		f.Close()
+		if desc != "" {
+			return desc
+		}
+	}
+	return ""
+}
+
+// parseMetadataSummary extracts the Summary field from a METADATA file.
+func (s CondaScanner) parseMetadataSummary(r io.Reader) string {
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "Summary: ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "Summary: "))
+		}
+	}
+	return ""
 }
 
 func (s CondaScanner) Uninstall(name, location string) error {
