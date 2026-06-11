@@ -59,7 +59,7 @@ var paletteCommands = []commandDef{
 		m.filter = ""
 		return nil
 	}},
-	{"Search", "Semantic search with LLM", "?", false, func(m *model) tea.Cmd {
+	{"Search", "Semantic search with LLM (experimental)", "?", false, func(m *model) tea.Cmd {
 		m.mode = "search"
 		m.semanticQuery = ""
 		m.semanticResults = nil
@@ -1095,6 +1095,7 @@ func (m *model) View() string {
 		} else {
 			inputLines := []string{
 				modalTitleStyle.Render("Ask installr"),
+				lipgloss.NewStyle().Foreground(orange).Render("⚗ experimental"),
 				"",
 				modalInputStyle.Width(modalWidth - 2).Render(m.semanticQuery + "█"),
 				"",
@@ -1303,7 +1304,7 @@ func (m *model) renderHelpPanel(w, h int) string {
 		{"←→ / hl", "Expand"},
 		{"Tab", "Switch source"},
 		{"/", "Filter"},
-		{"?", "Ask (LLM)"},
+		{"?", "Ask · exp"},
 		{":", "Command"},
 		{"t", "Theme"},
 		{"d", "Details"},
