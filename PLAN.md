@@ -124,18 +124,27 @@ Three distinct bordered regions:
 | `r` | Force rescan all managers (background) |
 | `q` / `ctrl+c` | Quit |
 
-## Semantic Search
-- Uses `sentence-transformers/all-MiniLM-L6-v2` (22MB) via Cybertron (pure-Go transformers)
-- Embeddings are cached in SQLite; first query downloads the model, subsequent queries are ~50-200ms
-- Query and package text are embedded as 384-dimensional vectors
-- Cosine similarity > 0.3 threshold; top 20 results displayed in the **Results** tab
-- Package text is enriched with source context: "python package", "node javascript package", "debian system package", etc.
+## Semantic Search ("Ask installr")
+- `?` opens the "Ask installr" modal: typing shows an instant substring preview,
+  `Enter` runs the semantic search and shows ranked hits in the **Results** tab.
+- Uses `sentence-transformers/all-MiniLM-L6-v2` (~22MB) via Cybertron (pure-Go);
+  package text is embedded as 384-dim vectors with source context ("python
+  package", "node javascript package", etc.).
+- Descriptions + embeddings are pre-computed at init and cached in SQLite, so a
+  query is just one encode + in-memory scoring — no enrichment/embedding in the
+  hot path (fast, cannot hang). Falls back to a substring match if the model or
+  embeddings are unavailable.
+- Ranking is hybrid (cosine similarity + keyword boost), implemented in the pure
+  `internal/search` package (`search.Rank`) shared by the TUI and the eval harness.
+- Quality is measured with `installr eval` (`internal/search/eval`): MRR / Hit@k
+  over a curated + synthetic golden set, with variant sweeps and baseline diffs.
 
 ## CLI Commands (Cobra)
 - `installr` → Launch TUI (default)
 - `installr scan` → Force rescan, print summary to stdout, exit
-- `installr install <name> --source <apt|snap|npm|pip|conda|bin> --location <system|path>` → CLI install, no TUI
-- `installr uninstall <name> --source <apt|snap|npm|pip|conda|bin> --location <system|path>` → CLI uninstall, no TUI
+- `installr eval [--synthetic N] [--variant ...] [--baseline f.json] [--out f.json]` → score search ranking (MRR/Hit@k)
+- `installr install <name> --source <src> --location <system|path>` → CLI install, no TUI
+- `installr uninstall <name> --source <src> --location <system|path>` → CLI uninstall, no TUI
 
 ## Architecture / File Layout
 ```
@@ -144,25 +153,27 @@ installr/
 ├── internal/
 │   ├── cmd/
 │   │   ├── root.go           # Cobra root, global flags (--db)
-│   │   └── subcommands.go    # scan, uninstall subcommands
+│   │   ├── subcommands.go    # scan, install, uninstall
+│   │   └── eval.go           # `eval` — search-ranking metrics harness
 │   ├── store/
-│   │   ├── store.go          # SQLite init, CRUD, caching
+│   │   ├── store.go          # SQLite init, CRUD, embeddings, enrichment_cache
 │   │   └── store_test.go
 │   ├── scanner/
-│   │   ├── scanner.go        # Interface: Scanner.Scan() -> []Package
-│   │   ├── apt.go            # dpkg-query parser
-│   │   ├── snap.go           # snap list parser
-│   │   ├── npm.go            # npm global + local envs
-│   │   ├── pip.go            # pip global + local envs
-│   │   ├── conda.go          # conda environment scanner
-│   │   └── bin.go            # user binary scanner
-│   ├── tui/
-│   │   ├── dashboard.go      # Main Bubble Tea Model, tab state, search
-│   │   ├── tree.go           # Tree view with groups, scroll, expand
-│   │   ├── styles.go         # Lipgloss style definitions
-│   │   └── dashboard_test.go # TUI tests
+│   │   ├── scanner.go        # Scanner interface
+│   │   ├── discovery.go      # AllScanners registry + DiscoverScanners
+│   │   ├── apt/snap/npm/pip/conda/bin.go        # core managers
+│   │   └── pixi/go/docker/brew/cargo/pacman/yay/flatpak/nix.go  # extra managers
+│   ├── enrich/              # description enrichment (local tools → PyPI/npm APIs, cached)
 │   ├── nlp/
-│   │   └── embedder.go       # Semantic search with sentence-transformers
+│   │   ├── embedder.go       # sentence-transformers embedder, cosine
+│   │   └── search.go         # query expansion + keyword score
+│   ├── search/
+│   │   ├── rank.go           # pure search.Rank (shared by TUI + eval)
+│   │   └── eval/             # MRR/Hit@k metrics, queries.json golden set, report/diff
+│   ├── tui/
+│   │   ├── dashboard.go      # Bubble Tea Model, tabs, search wiring
+│   │   ├── tree.go           # tree view; styles.go; themes
+│   │   └── *_test.go
 │   └── pkg/
 │       └── env.go            # CWD, home dir, path helpers, last-used
 ├── go.mod

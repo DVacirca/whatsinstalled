@@ -135,19 +135,18 @@ Every package must record the user who installed it:
 | `r` | Force rescan all managers (background) |
 | `q` / `Ctrl+C` | Quit |
 
-### 6.6 Search
-Press `?` to open a centered "Search packages" modal and type a query. It is a
-**live substring filter** (case-insensitive, matches package **name or
-description**), updating as you type:
-- The modal previews the match count and the first matches.
-- "No matches" is shown when nothing matches.
-- Matches populate the **Results** tab only (other tabs are unchanged).
-- `Enter` closes the modal and switches to the Results tab; `Esc` cancels and
-  clears the filter.
-
-(An embedding-based semantic search was prototyped — see the `embedding` column
-and `internal/nlp` — but the live substring filter replaced it as the default
-because it is instant and predictable.)
+### 6.6 Search ("Ask installr")
+Press `?` to open the centered "Ask installr" modal and type a query:
+- As you type, an instant **substring preview** (case-insensitive, name or
+  description) is shown for immediate feedback.
+- `Enter` runs **semantic search** — embedding cosine similarity + keyword boost
+  over all packages — and shows the ranked hits in the **Results** tab. `Esc`
+  cancels and clears.
+- Descriptions + embeddings are pre-computed at startup and cached, so search is
+  one query-encode + in-memory scoring (fast, cannot hang). If the model or
+  embeddings are unavailable, it falls back to the substring matches.
+- Ranking lives in the pure `internal/search` package (`search.Rank`); its quality
+  is measured by the `installr eval` harness (`internal/search/eval`).
 
 ### 6.4 Detail View
 - Pressing `d` highlights the Description panel title (`▸ Description`).
@@ -166,10 +165,13 @@ because it is instant and predictable.)
 |---------|-------------|
 | `installr` | Launch TUI (default) |
 | `installr scan` | Force rescan all managers, print summary, exit |
+| `installr eval [--synthetic N] [--variant ...] [--baseline f] [--out f]` | Score semantic-search ranking (MRR/Hit@k) |
 | `installr install <name> --source <src> --location <loc>` | Install a package via CLI (no TUI) |
 | `installr uninstall <name> --source <src> --location <loc>` | Uninstall a package via CLI (no TUI) |
 
-Sources accepted: `apt`, `snap`, `npm`, `pip`, `conda`, `bin`.
+Core sources: `apt`, `snap`, `npm`, `pip`, `conda`, `bin`. Additional managers
+scanned via the `scanner.AllScanners` registry: `pixi`, `go`, `docker`, `brew`,
+`cargo`, `pacman`, `yay`, `flatpak`, `nix`.
 
 All commands accept `--db <path>` to override the default database location (`~/.installr.db`).
 
