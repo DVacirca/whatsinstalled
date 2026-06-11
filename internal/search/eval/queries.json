@@ -1,0 +1,5 @@
+[
+  {"query": "tools for editing video", "expected": ["ffmpeg"]},
+  {"query": "compress files", "expected": ["gzip", "xz-utils", "p7zip-full", "zstd"]},
+  {"query": "monitor system resources", "expected": ["btop", "htop", "sysstat"]}
+]
