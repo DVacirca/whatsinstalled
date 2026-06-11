@@ -16,6 +16,7 @@ import (
 	"installr/internal/scanner"
 	"installr/internal/search"
 	"installr/internal/store"
+	"installr/internal/version"
 )
 
 // commandDef describes a command available in the command palette.
@@ -887,16 +888,18 @@ func (m *model) View() string {
 	}
 	counts := shellCountStyle.Render(strings.Join(countParts, "  │  "))
 	titleContent := lipgloss.JoinHorizontal(lipgloss.Left, title, "  ", counts)
-	indicator := ""
+	// Right corner: version, with the background-refresh indicator to its left.
+	right := lipgloss.NewStyle().Foreground(fgDim).Render(version.Version)
 	if m.bgUpdating {
-		indicator = lipgloss.NewStyle().Foreground(accent).Bold(true).Render("⟳ updating…")
+		indicator := lipgloss.NewStyle().Foreground(accent).Bold(true).Render("⟳ updating…")
+		right = lipgloss.JoinHorizontal(lipgloss.Left, indicator, "  ", right)
 	}
-	// Pad to full width so the bg is uniform across the entire line.
-	pad := sepWidth - lipgloss.Width(titleContent) - lipgloss.Width(indicator)
+	// Pad to full width so the bg is uniform and the version sits flush right.
+	pad := sepWidth - lipgloss.Width(titleContent) - lipgloss.Width(right)
 	if pad > 0 {
 		titleContent += strings.Repeat(" ", pad)
 	}
-	titleContent += indicator
+	titleContent += right
 	// Clamp so a long counts list can't overflow/wrap on narrow terminals.
 	titleBar := shellStyle.MaxWidth(sepWidth).Render(titleContent)
 

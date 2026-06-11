@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"installr/internal/store"
 	"installr/internal/tui"
+	"installr/internal/version"
 )
 
 var dbPath string
@@ -16,8 +17,9 @@ func init() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "installr",
-	Short: "A TUI dashboard for system packages",
+	Use:     "installr",
+	Version: version.Version,
+	Short:   "A TUI dashboard for system packages",
 	Long:  `installr gives you an overview of packages installed via apt, snap, npm, and pip.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runDashboard()
