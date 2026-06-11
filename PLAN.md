@@ -74,7 +74,7 @@ Three distinct bordered regions:
 │▶ nginx          1.24.0    apt      system         4.2M      │
 │  lodash         4.17.21   npm      ~/webapp       2M        │
 ├───────────────────────────────────────────────────────────────┤
-│ ↑↓ nav | tab switch | / filter | d detail | u uninstall |    │
+│ ↑↓ nav | tab switch | / filter | ? ask (exp) | d detail |    │
 │ r refresh | q quit                                           │
 └───────────────────────────────────────────────────────────────┘
 ```
@@ -99,16 +99,6 @@ Three distinct bordered regions:
   │ Press Esc or Enter to close           │
   └───────────────────────────────────────┘
   ```
-- **Confirm modal (key `u`):** Centered box with:
-  ```
-  ┌─ Uninstall ──────────────────────────┐
-  │ Uninstall nginx via apt?              │
-  │ Location: system                      │
-  │                                       │
-  │ [y] yes    [n] no (default)           │
-  └───────────────────────────────────────┘
-  ```
-  On `y`, run the uninstall command in a goroutine, show a spinner status in the footer, then refresh.
 
 ## Keybindings
 | Key | Action |
@@ -119,8 +109,6 @@ Three distinct bordered regions:
 | `?` | Open semantic search modal (natural language query) |
 | `Esc` | Clear filter, close modal, cancel search, or unfocus filter |
 | `Enter` / `d` | Open detail modal |
-| `i` | Install package (prompt for name, uses selected package's source/location) |
-| `u` | Uninstall selected package (confirm modal) |
 | `r` | Force rescan all managers (background) |
 | `q` / `ctrl+c` | Quit |
 
@@ -143,8 +131,9 @@ Three distinct bordered regions:
 - `installr` → Launch TUI (default)
 - `installr scan` → Force rescan, print summary to stdout, exit
 - `installr eval [--synthetic N] [--variant ...] [--baseline f.json] [--out f.json]` → score search ranking (MRR/Hit@k)
-- `installr install <name> --source <src> --location <system|path>` → CLI install, no TUI
-- `installr uninstall <name> --source <src> --location <system|path>` → CLI uninstall, no TUI
+- `installr --version` → print the version
+
+(installr is read-only — install/uninstall actions were removed.)
 
 ## Architecture / File Layout
 ```
@@ -153,7 +142,7 @@ installr/
 ├── internal/
 │   ├── cmd/
 │   │   ├── root.go           # Cobra root, global flags (--db)
-│   │   ├── subcommands.go    # scan, install, uninstall
+│   │   ├── subcommands.go    # scan
 │   │   └── eval.go           # `eval` — search-ranking metrics harness
 │   ├── store/
 │   │   ├── store.go          # SQLite init, CRUD, embeddings, enrichment_cache

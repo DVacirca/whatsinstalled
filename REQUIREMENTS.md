@@ -97,7 +97,7 @@ Every package must record the user who installed it:
 │                      │ Source: apt         │ Tab switch source   │
 │                      │ Location: system    │ / filter            │
 │                      │ User: system        │ d details           │
-│                      │ Size: 4.2M          │ u uninstall         │
+│                      │ Size: 4.2M          │ ? ask (exp)         │
 │                      │                     │ r rescan            │
 │                      │                     │ q quit              │
 ├─────────────────────────────────────────────────────────────────┤
@@ -115,7 +115,7 @@ Every package must record the user who installed it:
   - **Left**: Description (or location info when a group is selected).
   - **Center**: Metadata key-value pairs (Name, Version, Source, Location, User, Size).
   - **Right**: Keybindings reference.
-- **Status bar** (bottom strip): Context info — selected package, scanning state, errors, or inline confirmation prompt.
+- **Status bar** (bottom strip): Context info — selected package, scanning state, or errors.
 
 ### 6.3 Interaction
 | Key | Action |
@@ -125,13 +125,9 @@ Every package must record the user who installed it:
 | `←` / `h` | Collapse group |
 | `Tab` / `Shift+Tab` | Next / previous source tab |
 | `/` | Start filter input |
-| `?` | Open live package search (name/description filter → Results tab) |
-| `Esc` | Clear filter / close detail / cancel confirm / cancel search |
+| `?` | Ask installr (experimental): semantic search → Results tab |
+| `Esc` | Clear filter / close detail / cancel search |
 | `Enter` / `d` | Show detail view (highlights Description panel) |
-| `i` | Install a package (prompts for package name) |
-| `u` | Uninstall selected package (inline confirm bar) |
-| `y` / `Enter` | Confirm uninstall |
-| `n` / `Esc` | Cancel uninstall |
 | `r` | Force rescan all managers (background) |
 | `q` / `Ctrl+C` | Quit |
 
@@ -153,12 +149,6 @@ Press `?` to open the centered "Ask installr" modal and type a query:
 - Press `Esc` to exit detail view.
 - No modal overlay — all state changes are inline.
 
-### 6.5 Confirmation Bar
-- When `u` is pressed on a package, the status bar becomes a red confirmation strip:
-  ```
-  Uninstall nginx (apt) from system?   [y] yes  [n] cancel
-  ```
-
 ## 7. CLI Commands
 
 | Command | Description |
@@ -166,11 +156,11 @@ Press `?` to open the centered "Ask installr" modal and type a query:
 | `installr` | Launch TUI (default) |
 | `installr scan` | Force rescan all managers, print summary, exit |
 | `installr eval [--synthetic N] [--variant ...] [--baseline f] [--out f]` | Score semantic-search ranking (MRR/Hit@k) |
-| `installr install <name> --source <src> --location <loc>` | Install a package via CLI (no TUI) |
-| `installr uninstall <name> --source <src> --location <loc>` | Uninstall a package via CLI (no TUI) |
+| `installr --version` | Print the version |
 
-Core sources: `apt`, `snap`, `npm`, `pip`, `conda`, `bin`. Additional managers
-scanned via the `scanner.AllScanners` registry: `pixi`, `go`, `docker`, `brew`,
+Note: install/uninstall actions were removed — installr is read-only (inventory
++ search). Core sources scanned: `apt`, `snap`, `npm`, `pip`, `conda`, `bin`;
+plus, via the `scanner.AllScanners` registry: `pixi`, `go`, `docker`, `brew`,
 `cargo`, `pacman`, `yay`, `flatpak`, `nix`.
 
 All commands accept `--db <path>` to override the default database location (`~/.installr.db`).

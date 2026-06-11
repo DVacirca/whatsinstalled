@@ -31,30 +31,6 @@ type commandDef struct {
 // paletteCommands is the full list of commands shown in the command palette.
 var paletteCommands = []commandDef{
 	{"Details", "Show details", "d", false, func(m *model) tea.Cmd { m.mode = "detail"; return nil }},
-	{"Install", "Install a package", "i", false, func(m *model) tea.Cmd {
-		m.mode = "install"
-		m.installPkg = ""
-		if sel := m.tree.selectedPkg(); sel != nil {
-			m.installSource = sel.Source
-			m.installLocation = sel.Location
-		} else if sel := m.tree.selected(); sel != nil && sel.isGroup {
-			m.installSource = m.currentSource()
-			m.installLocation = sel.label
-		} else {
-			m.installSource = m.currentSource()
-			m.installLocation = "system"
-		}
-		if m.installLocation == "" {
-			m.installLocation = "system"
-		}
-		return nil
-	}},
-	{"Uninstall", "Uninstall selected package", "u", true, func(m *model) tea.Cmd {
-		if m.tree.selectedPkg() != nil {
-			m.mode = "confirm"
-		}
-		return nil
-	}},
 	{"Filter", "Filter packages by name", "/", false, func(m *model) tea.Cmd {
 		m.filtering = true
 		m.filter = ""
@@ -150,10 +126,7 @@ type model struct {
 	total            int
 	availableSources []string
 	availableLabels  []string
-	mode             string // "" | "detail" | "confirm" | "install" | "search" | "enriching"
-	installPkg       string
-	installSource    string
-	installLocation  string
+	mode             string // "" | "detail" | "search" | "enriching" | "theme-picker"
 	semanticQuery    string
 	semanticResults  []store.Package
 	searching        bool // true while LLM search is running
@@ -208,8 +181,6 @@ type dataLoadedMsg struct {
 
 type scanCompleteMsg struct{}
 type scanErrorMsg struct{ err error }
-type uninstallCompleteMsg struct{ err error }
-type installCompleteMsg struct{ err error }
 type semanticSearchResult struct {
 	results []store.Package
 	err     string
@@ -358,39 +329,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if msg.Type == tea.KeyRunes {
 					m.filter += msg.String()
 					cmds = append(cmds, m.loadData)
-				}
-			}
-			return m, tea.Batch(cmds...)
-		}
-
-		if m.mode == "confirm" {
-			switch msg.String() {
-			case "y", "Y", "enter":
-				cmds = append(cmds, m.doUninstall)
-				m.mode = ""
-			case "n", "N", "esc", "q", "ctrl+c":
-				m.mode = ""
-			}
-			return m, tea.Batch(cmds...)
-		}
-
-		if m.mode == "install" {
-			switch msg.String() {
-			case "esc":
-				m.mode = ""
-				m.installPkg = ""
-			case "enter":
-				if m.installPkg != "" {
-					cmds = append(cmds, m.doInstall)
-				}
-				m.mode = ""
-			case "backspace":
-				if len(m.installPkg) > 0 {
-					m.installPkg = m.installPkg[:len(m.installPkg)-1]
-				}
-			default:
-				if msg.Type == tea.KeyRunes {
-					m.installPkg += msg.String()
 				}
 			}
 			return m, tea.Batch(cmds...)
@@ -571,28 +509,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.tree.selectedPkg() != nil || (m.tree.selected() != nil && m.tree.selected().isGroup) {
 				m.mode = "detail"
 			}
-		case "u":
-			if m.tree.selectedPkg() != nil {
-				m.mode = "confirm"
-			}
-		case "i":
-			m.mode = "install"
-			m.installPkg = ""
-			// Determine install location from selection
-			if sel := m.tree.selectedPkg(); sel != nil {
-				m.installSource = sel.Source
-				m.installLocation = sel.Location
-			} else if sel := m.tree.selected(); sel != nil && sel.isGroup {
-				m.installSource = m.currentSource()
-				m.installLocation = sel.label
-			} else {
-				m.installSource = m.currentSource()
-				m.installLocation = "system"
-			}
-			// For npm/pip/conda, if no specific location, default to CWD
-			if m.installLocation == "" {
-				m.installLocation = "system"
-			}
 		case "?":
 			m.mode = "search"
 			m.semanticQuery = ""
@@ -730,22 +646,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			cmds = append(cmds, m.loadData)
 		}
-
-	case uninstallCompleteMsg:
-		m.scanning = false
-		m.bgUpdating = false
-		if msg.err != nil {
-			m.scanErr = msg.err
-		}
-		cmds = append(cmds, m.loadData)
-
-	case installCompleteMsg:
-		m.scanning = false
-		m.bgUpdating = false
-		if msg.err != nil {
-			m.scanErr = msg.err
-		}
-		cmds = append(cmds, m.loadData)
 
 	case semanticSearchResult:
 		tracef("semanticSearchResult handler: %d results, err=%s, version=%d (current=%d)", len(msg.results), msg.err, msg.version, m.searchVersion)
@@ -1311,8 +1211,6 @@ func (m *model) renderHelpPanel(w, h int) string {
 		{":", "Command"},
 		{"t", "Theme"},
 		{"d", "Details"},
-		{"i", "Install"},
-		{"u", "Uninstall"},
 		{"r", "Rescan"},
 		{"q", "Quit"},
 	}
@@ -1366,24 +1264,6 @@ func (m *model) renderHelpPanel(w, h int) string {
 }
 
 func (m *model) renderStatusBar() string {
-	if m.mode == "confirm" {
-		sel := m.tree.selectedPkg()
-		if sel != nil {
-			prompt := fmt.Sprintf(" Uninstall %s (%s) from %s? ", sel.Name, sel.Source, truncate(sel.Location, 20))
-			hint := confirmKeyStyle.Render("[y]") + " yes  " + confirmKeyStyle.Render("[n]") + " cancel"
-			return confirmStyle.Width(m.width).Render(
-				lipgloss.JoinHorizontal(lipgloss.Center, prompt, hint),
-			)
-		}
-	}
-
-	if m.mode == "install" {
-		prompt := fmt.Sprintf(" Install package in %s (%s): %s█", m.installLocation, m.installSource, m.installPkg)
-		return confirmStyle.Width(m.width).Render(
-			lipgloss.JoinHorizontal(lipgloss.Center, prompt, "  "+confirmKeyStyle.Render("[Enter]")+" confirm  "+confirmKeyStyle.Render("[Esc]")+" cancel"),
-		)
-	}
-
 	var parts []string
 	if m.searching {
 		parts = append(parts, "⟳ searching...")
@@ -1549,55 +1429,6 @@ func pollScanProgressCmd(ch chan scanProgressMsg) tea.Cmd {
 			return scanErrorMsg{err: fmt.Errorf("scan timeout after 120s")}
 		}
 	}
-}
-
-func findScanner(source string) scanner.Scanner {
-	for _, sc := range scanner.AllScanners {
-		if sc.Name() == source {
-			return sc
-		}
-	}
-	return nil
-}
-
-func (m *model) doUninstall() tea.Msg {
-	sel := m.tree.selectedPkg()
-	if sel == nil {
-		return nil
-	}
-
-	sc := findScanner(sel.Source)
-	if sc == nil {
-		return uninstallCompleteMsg{err: fmt.Errorf("unknown source: %s", sel.Source)}
-	}
-
-	cmd := sc.UninstallCmd(sel.Name, sel.Location)
-	return tea.ExecProcess(cmd, func(err error) tea.Msg {
-		if err != nil {
-			return uninstallCompleteMsg{err: fmt.Errorf("uninstall failed: %w", err)}
-		}
-		_ = m.store.Delete(sel.Name, sel.Source, sel.Location)
-		return uninstallCompleteMsg{}
-	})
-}
-
-func (m *model) doInstall() tea.Msg {
-	if m.installPkg == "" {
-		return nil
-	}
-
-	sc := findScanner(m.installSource)
-	if sc == nil {
-		return installCompleteMsg{err: fmt.Errorf("unknown source: %s", m.installSource)}
-	}
-
-	cmd := sc.InstallCmd(m.installPkg, m.installLocation)
-	return tea.ExecProcess(cmd, func(err error) tea.Msg {
-		if err != nil {
-			return installCompleteMsg{err: fmt.Errorf("install failed: %w", err)}
-		}
-		return installCompleteMsg{}
-	})
 }
 
 // liveSearch filters all packages by the current query (name or description

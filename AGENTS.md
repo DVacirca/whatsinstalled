@@ -19,9 +19,10 @@ go vet ./...                         # vet
 ./installr                           # launch the TUI
 ./installr scan                      # rescan + print per-source counts
 ./installr eval --synthetic 30       # evaluate semantic-search ranking (MRR/Hit@k)
-./installr install <name> --source pip [--location <path>]
-./installr uninstall <name> --source apt
+./installr --version                 # print version
 ```
+installr is read-only: it inventories and searches packages — there is no
+install/uninstall action (removed).
 Note: the shell on this machine prints `command not found: _encode/_decode` noise
 from the user's zsh profile — ignore it; it is not from our code. There is no
 `sqlite3` CLI here — query the DB via a throwaway Go program using the `store`
@@ -31,7 +32,7 @@ package.
 ```
 cmd/installr        entrypoint
 cmd/enrich          one-off enrichment helper
-internal/cmd        cobra commands (root, scan/install/uninstall, eval)
+internal/cmd        cobra commands (root, scan, eval)
 internal/scanner    one file per package manager; AllScanners registry + DiscoverScanners
 internal/store      SQLite (modernc.org/sqlite), WAL mode; Package model, embeddings, enrichment_cache
 internal/enrich     description enrichment (local tools first, then PyPI/npm APIs; cached, timeouts)
