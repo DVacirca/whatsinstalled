@@ -12,8 +12,8 @@ import (
 // treeNode is either a group (location) or a leaf (package).
 type treeNode struct {
 	isGroup  bool
-	label    string       // display label
-	count    int          // child count for groups
+	label    string         // display label
+	count    int            // child count for groups
 	pkg      *store.Package // nil for groups
 	children []*treeNode
 	expanded bool
@@ -22,11 +22,11 @@ type treeNode struct {
 
 // treeView manages a tree of packages grouped by location.
 type treeView struct {
-	roots      []*treeNode
-	flat       []*treeNode  // visible nodes (respecting expand state)
-	cursor     int
-	scrollOff  int
-	expanded   map[string]bool // persistent expand state by "source:location" key
+	roots     []*treeNode
+	flat      []*treeNode // visible nodes (respecting expand state)
+	cursor    int
+	scrollOff int
+	expanded  map[string]bool // persistent expand state by "source:location" key
 }
 
 func newTreeView() *treeView {
@@ -37,13 +37,11 @@ func newTreeView() *treeView {
 
 // buildTree groups packages by location and builds a 2-level tree.
 func (tv *treeView) buildTree(packages []store.Package) {
-	// Group by location
 	byLoc := make(map[string][]store.Package)
 	for _, p := range packages {
 		byLoc[p.Location] = append(byLoc[p.Location], p)
 	}
 
-	// Sort locations
 	var locs []string
 	for loc := range byLoc {
 		locs = append(locs, loc)
@@ -53,7 +51,6 @@ func (tv *treeView) buildTree(packages []store.Package) {
 	var roots []*treeNode
 	for _, loc := range locs {
 		pkgs := byLoc[loc]
-		// Sort packages within group by name
 		sort.Slice(pkgs, func(i, j int) bool {
 			return strings.ToLower(pkgs[i].Name) < strings.ToLower(pkgs[j].Name)
 		})
@@ -85,7 +82,6 @@ func (tv *treeView) isExpanded(loc string) bool {
 	if v, ok := tv.expanded[loc]; ok {
 		return v
 	}
-	// Default: expand groups with few items, collapse large ones
 	return false
 }
 
@@ -162,7 +158,17 @@ func (tv *treeView) setCursorToPkg(name, source, location string) {
 // render draws the tree, returns lines as a single string.
 func (tv *treeView) render(width, height int) string {
 	if len(tv.flat) == 0 {
-		return tableCellStyle.Render("  No packages found. Press 'r' to scan.")
+		msg := "  No packages found. Press 'r' to scan."
+		pad := width - lipgloss.Width(msg)
+		if pad > 0 {
+			msg += strings.Repeat(" ", pad)
+		}
+		// Pad to full height so the body doesn't collapse when empty.
+		lines := []string{bodyCellStyle.Render(msg)}
+		for len(lines) < height {
+			lines = append(lines, bodyCellStyle.Render(strings.Repeat(" ", width)))
+		}
+		return strings.Join(lines, "\n")
 	}
 
 	// Adjust scroll to keep cursor visible
@@ -186,9 +192,10 @@ func (tv *treeView) render(width, height int) string {
 		lines = append(lines, tv.renderNode(tv.flat[i], i == tv.cursor, width))
 	}
 
-	// Pad remaining height
+	// Pad remaining height with blank bg-filled lines
 	for len(lines) < height {
-		lines = append(lines, strings.Repeat(" ", width))
+		blank := strings.Repeat(" ", width)
+		lines = append(lines, bodyCellStyle.Render(blank))
 	}
 
 	return strings.Join(lines, "\n")
@@ -209,7 +216,6 @@ func (tv *treeView) renderGroupNode(n *treeNode, selected bool, width int) strin
 	label := fmt.Sprintf("%s%s", prefix, n.label)
 	countStr := fmt.Sprintf("[%d]", n.count)
 
-	// Pad to full width
 	padding := width - lipgloss.Width(label) - lipgloss.Width(countStr) - 1
 	if padding < 1 {
 		padding = 1
@@ -221,45 +227,148 @@ func (tv *treeView) renderGroupNode(n *treeNode, selected bool, width int) strin
 		if pad > 0 {
 			line += strings.Repeat(" ", pad)
 		}
-		return tableSelectedStyle.Render(line)
+		return bodySelectedStyle.Render(line)
 	}
-	return lipgloss.NewStyle().Bold(true).Foreground(accent).Render(line)
+	return bodyGroupStyle.Render(line)
 }
 
 func (tv *treeView) renderLeafNode(n *treeNode, selected bool, width int) string {
 	p := n.pkg
 	if p == nil {
-		return strings.Repeat(" ", width)
+		blank := strings.Repeat(" ", width)
+		return bodyCellStyle.Render(blank)
 	}
 
 	indent := "  "
-	name := truncate(p.Name, 14)
-	ver := truncate(p.Version, 8)
-	src := truncate(p.Source, 5)
-	loc := truncate(p.Location, 12)
-	user := truncate(p.User, 6)
+	availWidth := width - lipgloss.Width(indent)
+	cols := calcColumnWidths(availWidth)
+
+	name := truncate(p.Name, cols.name)
+	ver := truncate(p.Version, cols.ver)
+	src := truncate(p.Source, cols.src)
+	loc := truncate(p.Location, cols.loc)
+	user := truncate(p.User, cols.user)
 	size := formatSize(p.SizeBytes)
+	sizeStr := truncate(size, cols.size)
 	lastUsed := formatLastUsed(p.LastUsed)
 
-	line := fmt.Sprintf("%s%-14s %-8s %-5s %-12s %-6s %-6s %-6s",
-		indent, name, ver, src, loc, user, size, lastUsed)
+	line := fmt.Sprintf("%s%-*s %-*s %-*s %-*s %-*s %-*s %-*s",
+		indent,
+		cols.name, name,
+		cols.ver, ver,
+		cols.src, src,
+		cols.loc, loc,
+		cols.user, user,
+		cols.size, sizeStr,
+		cols.used, lastUsed)
 
 	if selected {
 		pad := width - lipgloss.Width(line)
 		if pad > 0 {
 			line += strings.Repeat(" ", pad)
 		}
-		return tableSelectedStyle.Render(line)
+		return bodySelectedStyle.Render(line)
 	}
-	return tableCellStyle.Render(line)
+	return bodyCellStyle.Render(line)
+}
+
+type colWidths struct {
+	name, ver, src, loc, user, size, used int
+}
+
+func calcColumnWidths(availWidth int) colWidths {
+	const spaces = 6 // spaces between 7 columns
+	const (
+		minName = 6
+		minVer  = 3
+		minSrc  = 3
+		minLoc  = 4
+		minUser = 3
+		minSize = 3
+		minUsed = 3
+	)
+	minContent := minName + minVer + minSrc + minLoc + minUser + minSize + minUsed
+	target := colWidths{14, 8, 5, 12, 6, 6, 6}
+	targetContent := target.name + target.ver + target.src + target.loc + target.user + target.size + target.used
+
+	contentWidth := availWidth - spaces
+	if contentWidth <= 0 {
+		return colWidths{1, 1, 1, 1, 1, 1, 1}
+	}
+
+	// Helper to distribute remaining space proportionally.
+	scale := func(min, target int) int {
+		if contentWidth <= minContent {
+			// Scale down from minimums
+			s := float64(contentWidth) / float64(minContent)
+			w := int(float64(min) * s)
+			if w < 1 {
+				w = 1
+			}
+			return w
+		}
+		if contentWidth >= targetContent {
+			return target
+		}
+		s := float64(contentWidth-minContent) / float64(targetContent-minContent)
+		return min + int(float64(target-min)*s)
+	}
+
+	c := colWidths{
+		scale(minName, target.name),
+		scale(minVer, target.ver),
+		scale(minSrc, target.src),
+		scale(minLoc, target.loc),
+		scale(minUser, target.user),
+		scale(minSize, target.size),
+		scale(minUsed, target.used),
+	}
+
+	// Ensure total content fits exactly; subtract overflow from location.
+	total := c.name + c.ver + c.src + c.loc + c.user + c.size + c.used
+	if total > contentWidth {
+		c.loc -= total - contentWidth
+		if c.loc < 1 {
+			c.loc = 1
+		}
+	}
+	// Below target, scale() interpolates and rounding can leave a small
+	// remainder — give it to location. At/above target the slack is handled
+	// by the name/location split below, so don't add it here too (doing both
+	// double-counted the slack and made rows ~2x too wide).
+	if total < contentWidth && contentWidth < targetContent {
+		c.loc += contentWidth - total
+	}
+
+	// If we have extra space (target or above), give it to name and location.
+	if contentWidth >= targetContent {
+		extra := contentWidth - targetContent
+		nameExtra := extra / 2
+		locExtra := extra - nameExtra
+		c.name += nameExtra
+		c.loc += locExtra
+	}
+
+	return c
 }
 
 func renderTreeHeader(width int) string {
-	line := fmt.Sprintf("  %-14s %-8s %-5s %-12s %-6s %-6s %-6s",
-		"Name", "Version", "Src", "Location", "User", "Size", "Used")
+	indent := "  "
+	availWidth := width - lipgloss.Width(indent)
+	cols := calcColumnWidths(availWidth)
+
+	line := fmt.Sprintf("%s%-*s %-*s %-*s %-*s %-*s %-*s %-*s",
+		indent,
+		cols.name, "Name",
+		cols.ver, "Version",
+		cols.src, "Src",
+		cols.loc, "Location",
+		cols.user, "User",
+		cols.size, "Size",
+		cols.used, "Used")
 	pad := width - lipgloss.Width(line)
 	if pad > 0 {
 		line += strings.Repeat(" ", pad)
 	}
-	return tableHeaderStyle.Render(line)
+	return shellHeaderStyle.Render(line)
 }

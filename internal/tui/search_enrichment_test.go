@@ -349,7 +349,9 @@ func TestSearchFlowStateCleanup(t *testing.T) {
 	m.mode = "search"
 	m.semanticQuery = "test"
 
-	m.Update(semanticSearchResult{results: []store.Package{}})
+	// Successful (non-empty) result: modal closes and state is cleaned up.
+	// (Empty/failed results intentionally keep the modal open with feedback.)
+	m.Update(semanticSearchResult{results: []store.Package{{Name: "ripgrep", Source: "apt", Location: "system"}}})
 
 	if m.searching {
 		t.Fatal("searching should be false after result")
@@ -456,11 +458,11 @@ func TestEmptySearchQuery(t *testing.T) {
 	m.semanticQuery = ""
 	cmd := m.startSearch()
 
-	// Should return nil results for empty query
+	// Should return empty results for empty query
 	msg := cmd()
 	if result, ok := msg.(semanticSearchResult); ok {
-		if result.results != nil {
-			t.Fatal("empty query should return nil results")
+		if len(result.results) != 0 {
+			t.Fatal("empty query should return empty results")
 		}
 	}
 }
@@ -667,10 +669,13 @@ func TestSearchTimeout(t *testing.T) {
 
 	// Execute and check result
 	msg := cmd()
-	// If embedder is nil, should return empty results
+	// If embedder is nil, should return empty results with error
 	if result, ok := msg.(semanticSearchResult); ok {
-		if result.results != nil {
-			t.Fatal("should return nil results when embedder is nil")
+		if len(result.results) != 0 {
+			t.Fatal("should return empty results when embedder is nil")
+		}
+		if result.err == "" {
+			t.Fatal("should return error when embedder is nil")
 		}
 	}
 }
@@ -751,9 +756,9 @@ func TestEmptySearchResults(t *testing.T) {
 	// Send empty search results
 	m.Update(semanticSearchResult{results: []store.Package{}})
 
-	// Should show error
-	if m.scanErr == nil {
-		t.Fatal("scanErr should be set for empty results")
+	// Should show feedback inside the Ask modal (not the status bar)
+	if m.searchMsg == "" {
+		t.Fatal("searchMsg should be set for empty results")
 	}
 }
 
