@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -123,14 +124,9 @@ func (s *Store) Upsert(p Package) error {
 }
 
 // List returns packages matching an optional source filter ("" for all).
-func (s *Store) List(sourceFilter string) ([]Package, error) {
-	var rows *sql.Rows
-	var err error
-	if sourceFilter == "" {
-		rows, err = s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used FROM packages ORDER BY name COLLATE NOCASE`)
-	} else {
-		rows, err = s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used FROM packages WHERE source = ? ORDER BY name COLLATE NOCASE`, sourceFilter)
-	}
+func (s *Store) List(sourceFilter string, hideAuto bool) ([]Package, error) {
+	where, args := whereClause(sourceFilter, "", hideAuto)
+	rows, err := s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used FROM packages`+where+` ORDER BY name COLLATE NOCASE`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list packages: %w", err)
 	}
@@ -140,21 +136,38 @@ func (s *Store) List(sourceFilter string) ([]Package, error) {
 }
 
 // Search returns packages matching a name substring within an optional source filter.
-func (s *Store) Search(query, sourceFilter string) ([]Package, error) {
-	query = "%" + query + "%"
-	var rows *sql.Rows
-	var err error
-	if sourceFilter == "" {
-		rows, err = s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used FROM packages WHERE name LIKE ? ORDER BY name COLLATE NOCASE`, query)
-	} else {
-		rows, err = s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used FROM packages WHERE name LIKE ? AND source = ? ORDER BY name COLLATE NOCASE`, query, sourceFilter)
-	}
+func (s *Store) Search(query, sourceFilter string, hideAuto bool) ([]Package, error) {
+	where, args := whereClause(sourceFilter, query, hideAuto)
+	rows, err := s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used FROM packages`+where+` ORDER BY name COLLATE NOCASE`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("search packages: %w", err)
 	}
 	defer rows.Close()
 
 	return scanRows(rows)
+}
+
+// whereClause builds an optional WHERE filter shared by List/Search/CountBySource.
+// An empty source or nameLike omits that condition; hideAuto excludes
+// auto-installed (dependency) packages.
+func whereClause(source, nameLike string, hideAuto bool) (string, []any) {
+	var conds []string
+	var args []any
+	if nameLike != "" {
+		conds = append(conds, "name LIKE ?")
+		args = append(args, "%"+nameLike+"%")
+	}
+	if source != "" {
+		conds = append(conds, "source = ?")
+		args = append(args, source)
+	}
+	if hideAuto {
+		conds = append(conds, "auto_installed = 0")
+	}
+	if len(conds) == 0 {
+		return "", args
+	}
+	return " WHERE " + strings.Join(conds, " AND "), args
 }
 
 // SearchText returns packages whose name OR description matches the query
@@ -191,9 +204,12 @@ func (s *Store) Count() (int, error) {
 	return total, nil
 }
 
-// CountBySource returns package counts per source.
-func (s *Store) CountBySource() (map[string]int, int, error) {
-	rows, err := s.db.Query(`SELECT source, COUNT(*) FROM packages GROUP BY source`)
+// CountBySource returns package counts per source. When hideAuto is true,
+// auto-installed (dependency) packages are excluded so tab counts match the
+// filtered list.
+func (s *Store) CountBySource(hideAuto bool) (map[string]int, int, error) {
+	where, args := whereClause("", "", hideAuto)
+	rows, err := s.db.Query(`SELECT source, COUNT(*) FROM packages`+where+` GROUP BY source`, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("count by source: %w", err)
 	}

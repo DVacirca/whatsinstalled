@@ -28,8 +28,28 @@ func (s AptScanner) Scan() ([]store.Package, error) {
 	return s.scanAll()
 }
 
+// manualAptPackages returns the set of packages a user explicitly installed
+// (not pulled in automatically as a dependency). apt tracks this in
+// /var/lib/apt/extended_states, surfaced via `apt-mark showmanual` — the
+// dpkg-query ${Auto-Installed} field is unreliable for this.
+func manualAptPackages() map[string]bool {
+	manual := map[string]bool{}
+	out, err := exec.Command("apt-mark", "showmanual").Output()
+	if err != nil {
+		return manual
+	}
+	sc := bufio.NewScanner(bytes.NewReader(out))
+	for sc.Scan() {
+		if name := strings.TrimSpace(sc.Text()); name != "" {
+			manual[name] = true
+		}
+	}
+	return manual
+}
+
 // scanAll is a fallback that returns all installed apt packages.
 func (s AptScanner) scanAll() ([]store.Package, error) {
+	manual := manualAptPackages()
 	cmd := exec.Command("dpkg-query", "-W", "-f=${Package}\t${Version}\t${Installed-Size}\t${Status}\t${Auto-Installed}\t${Description}\n")
 	out, err := cmd.Output()
 	if err != nil {
@@ -57,6 +77,11 @@ func (s AptScanner) scanAll() ([]store.Package, error) {
 			Source:   "apt",
 			Location: "system",
 			User:     "system",
+		}
+		// Auto-installed = present in dpkg but not explicitly chosen by the
+		// user. Only trust this when apt-mark gave us a manual set.
+		if len(manual) > 0 {
+			p.AutoInstalled = !manual[fields[0]]
 		}
 		if len(fields) > 2 && fields[2] != "" {
 			var sz int64

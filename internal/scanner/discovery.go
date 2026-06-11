@@ -9,14 +9,21 @@ var AllScanners = []Scanner{
 	CondaScanner{},
 	BinScanner{},
 	PixiScanner{},
+	PipxScanner{},
+	UvScanner{},
 	GoScanner{},
 	DockerScanner{},
+	PodmanScanner{},
 	BrewScanner{},
 	CargoScanner{},
+	GemScanner{},
+	PnpmScanner{},
+	YarnScanner{},
 	PacmanScanner{},
 	YayScanner{},
 	FlatpakScanner{},
 	NixScanner{},
+	AppImageScanner{},
 }
 
 // DiscoverScanners returns only the scanners that have actual packages present.

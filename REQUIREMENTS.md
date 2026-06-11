@@ -45,7 +45,7 @@ Each package record must include:
 | `description` | string | One-line summary if available |
 | `installed_at` | string | ISO8601 or empty |
 | `user` | string | Who installed it (see §4) |
-| `auto_installed` | bool | `true` only for apt deps (filtered out anyway) |
+| `auto_installed` | bool | `true` for apt dependency packages (`apt-mark showmanual`); hidden by default, toggle with `a` |
 | `last_used` | time? | Access time of the package directory |
 | `embedding` | string | JSON float64 array for semantic search (cached) |
 
@@ -160,8 +160,27 @@ Press `?` to open the centered "Ask installr" modal and type a query:
 
 Note: install/uninstall actions were removed — installr is read-only (inventory
 + search). Core sources scanned: `apt`, `snap`, `npm`, `pip`, `conda`, `bin`;
-plus, via the `scanner.AllScanners` registry: `pixi`, `go`, `docker`, `brew`,
-`cargo`, `pacman`, `yay`, `flatpak`, `nix`.
+plus, via the `scanner.AllScanners` registry: `pixi`, `pipx`, `uv`, `go`,
+`docker`, `podman`, `brew`, `cargo`, `gem`, `pnpm`, `yarn`, `pacman`, `yay`,
+`flatpak`, `nix`, `appimage`.
+
+Each scanner appears as a TUI tab only when it is installed AND actually has
+packages (`DiscoverScanners` → `IsAvailable() && Probe()`; `buildTabs` emits a
+tab only when `counts[name] > 0`), so the tab strip is fully dynamic per host.
+
+- **pipx**: isolated Python CLI apps (`pipx list --json`, `~/.local/share/pipx/venvs/*`).
+- **uv**: tools from `uv tool install` (`uv tool list`, `~/.local/share/uv/tools/*`).
+- **gem**: locally installed RubyGems (`gem list --local`).
+- **pnpm / yarn**: globally installed JS packages (`pnpm ls -g --json`, `yarn global list`).
+- **podman**: local container images (mirrors the docker scanner).
+- **appimage**: portable `*.AppImage` apps in `~/Applications`, `~/Downloads`,
+  `~/.local/bin`, `/opt` — tracked by no package manager.
+
+The apt scanner sets `auto_installed` from `apt-mark showmanual` (the dpkg
+`${Auto-Installed}` field is unreliable). The TUI hides auto-installed
+dependency packages by default; press `a` to toggle. Filtering happens in the
+store (`List`/`Search`/`CountBySource` take a `hideAuto` flag) so tab counts and
+rows stay consistent.
 
 All commands accept `--db <path>` to override the default database location (`~/.installr.db`).
 

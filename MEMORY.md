@@ -25,6 +25,15 @@
 - **conda**: `conda env list --json` returns env paths. For each env, `conda list --json -p <env_path>` returns packages. Each package has `name`, `version`, `channel`, `build_string`. System-wide packages may number in the thousands.
   - Use `pkg.FileOwner(envPath)` to determine who owns the conda environment.
 - **bin**: Scans executable files in `~/.local/bin`, `~/bin`, `~/go/bin`, `~/.cargo/bin`, `~/.yarn/bin`, `~/.npm-global/bin`, `~/.nvm/versions/node/*/bin`, `~/.rbenv/shims`, `~/.pyenv/shims`, `/usr/local/bin`, and `/usr/bin`. Also scans any PATH directory under `$HOME`. Filters by executable bit (`mode & 0111`).
+- **pipx**: `pipx list --json` → `venvs.<app>.metadata.main_package.{package,package_version}`. Location `~/.local/share/pipx/venvs/<app>`.
+- **uv**: parse `uv tool list` — `name vX.Y.Z` lines; indented `- app` lines (binaries) are skipped. Location `~/.local/share/uv/tools/<name>`.
+- **gem**: `gem list --local` → `name (1.2.3, 1.0.0)` or `name (default: 0.1.1)`; take first version, strip `default: `. Location from `gem environment gemdir`.
+- **pnpm**: `pnpm ls -g --depth=0 --json` → array of `{dependencies:{name:{version}}}`. Empty when no globals (tab won't show).
+- **yarn** (v1): parse `yarn global list` — `info "name@version" has binaries:` lines; split on the LAST `@` to support `@scope/pkg`.
+- **podman**: copy of the docker scanner (`podman images --format {{json .}}`).
+- **appimage**: always `IsAvailable`; scans `~/Applications`, `~/Downloads`, `~/.local/bin`, `/opt` (depth 1) for `*.AppImage`. `splitAppImageName` strips the suffix and best-effort extracts a trailing `-1.2.3` version (regex `[-_]v?\d[\w.]*$`).
+- New scanners need no TUI changes: register in `scanner.AllScanners` (registry order = tab order) and `buildTabs` renders a tab only when `counts[name] > 0`. Text-parsing scanners have `parseX` helpers unit-tested in `parse_test.go`.
+- **auto-installed filter**: `store.List/Search/CountBySource` take a `hideAuto bool` (shared `whereClause` helper adds `auto_installed = 0`). TUI model `hideAuto` defaults true; key `a` and palette "Deps" toggle it, then reload via `loadData`. Keeps tab counts consistent with rows.
 
 ### User Tracking
 - Added `user` column to `packages` table.

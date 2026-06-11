@@ -488,7 +488,7 @@ func TestSearchWithEmbeddings(t *testing.T) {
 	}
 
 	// Get the ID and set embedding
-	pkgs, err := s.List("")
+	pkgs, err := s.List("", false)
 	if err != nil {
 		t.Fatal(err)
 	}

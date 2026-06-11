@@ -151,7 +151,7 @@ installr/
 │   │   ├── scanner.go        # Scanner interface
 │   │   ├── discovery.go      # AllScanners registry + DiscoverScanners
 │   │   ├── apt/snap/npm/pip/conda/bin.go        # core managers
-│   │   └── pixi/go/docker/brew/cargo/pacman/yay/flatpak/nix.go  # extra managers
+│   │   └── pixi/pipx/uv/go/docker/podman/brew/cargo/gem/pnpm/yarn/pacman/yay/flatpak/nix/appimage.go  # extra managers
 │   ├── enrich/              # description enrichment (local tools → PyPI/npm APIs, cached)
 │   ├── nlp/
 │   │   ├── embedder.go       # sentence-transformers embedder, cosine

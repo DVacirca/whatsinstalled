@@ -51,6 +51,10 @@ var paletteCommands = []commandDef{
 		m.initStep = "scan"
 		return func() tea.Msg { return m.fullInitWithProgress() }
 	}},
+	{"Deps", "Show/hide auto-installed dependency packages", "a", false, func(m *model) tea.Cmd {
+		m.hideAuto = !m.hideAuto
+		return m.loadData
+	}},
 	{"Quit", "Quit installr", "q", false, func(m *model) tea.Cmd { return tea.Quit }},
 	{"Theme", "Switch color theme", "t", false, func(m *model) tea.Cmd {
 		m.mode = "theme-picker"
@@ -133,6 +137,7 @@ type model struct {
 	searchVersion    int  // incremented each time a search starts
 	scanning         bool
 	bgUpdating       bool // background refresh active: cached data shown with corner indicator instead of splash
+	hideAuto         bool // hide auto-installed (dependency) packages; toggled with 'a'
 
 	// command palette
 	cmdPaletteOpen  bool
@@ -229,6 +234,7 @@ func NewModel(s *store.Store) *model {
 		store:            s,
 		tree:             newTreeView(),
 		counts:           make(map[string]int),
+		hideAuto:         true, // dependency packages are noise by default
 		scanning:         true,
 		initLogs:         []string{"Checking installed packages..."},
 		availableSources: []string{""},
@@ -491,6 +497,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "/":
 			m.filtering = true
 			m.filter = ""
+		case "a":
+			m.hideAuto = !m.hideAuto
+			cmds = append(cmds, m.loadData)
 		case "up", "k":
 			m.tree.moveCursor(-1)
 		case "down", "j":
@@ -1201,12 +1210,21 @@ func (m *model) renderMetaPanel(w, h int) string {
 	return strings.Join(lines, "\n")
 }
 
+// autoToggleLabel describes what pressing 'a' will do given the current state.
+func autoToggleLabel(hideAuto bool) string {
+	if hideAuto {
+		return "Show deps"
+	}
+	return "Hide deps"
+}
+
 func (m *model) renderHelpPanel(w, h int) string {
 	keys := []struct{ k, v string }{
 		{"↑↓ / jk", "Navigate"},
 		{"←→ / hl", "Expand"},
 		{"Tab", "Switch source"},
 		{"/", "Filter"},
+		{"a", autoToggleLabel(m.hideAuto)},
 		{"?", "Ask (experimental)"},
 		{":", "Command"},
 		{"t", "Theme"},
@@ -1311,14 +1329,14 @@ func (m *model) loadData() tea.Msg {
 		// Results tab shows the last semantic search results.
 		pkgs = m.semanticResults
 	} else if m.filter != "" {
-		pkgs, err = m.store.Search(m.filter, source)
+		pkgs, err = m.store.Search(m.filter, source, m.hideAuto)
 	} else {
-		pkgs, err = m.store.List(source)
+		pkgs, err = m.store.List(source, m.hideAuto)
 	}
 	if err != nil {
 		return scanErrorMsg{err: err}
 	}
-	counts, total, err := m.store.CountBySource()
+	counts, total, err := m.store.CountBySource(m.hideAuto)
 	if err != nil {
 		return scanErrorMsg{err: err}
 	}

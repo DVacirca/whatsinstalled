@@ -20,14 +20,7 @@ var scanCmd = &cobra.Command{
 		}
 		defer s.Close()
 
-		scanners := []scanner.Scanner{
-			scanner.AptScanner{},
-			scanner.SnapScanner{},
-			scanner.NpmScanner{},
-			scanner.PipScanner{},
-			scanner.CondaScanner{},
-			scanner.BinScanner{},
-		}
+		scanners := scanner.DiscoverScanners()
 
 		cutoff := time.Now()
 		for _, sc := range scanners {
@@ -43,14 +36,16 @@ var scanCmd = &cobra.Command{
 
 		_ = s.PurgeStale(cutoff)
 
-		counts, total, err := s.CountBySource()
+		counts, total, err := s.CountBySource(false)
 		if err != nil {
 			return err
 		}
 
 		fmt.Printf("Total packages: %d\n", total)
-		for _, src := range []string{"apt", "snap", "npm", "pip", "conda", "bin"} {
-			fmt.Printf("  %s: %d\n", src, counts[src])
+		for _, sc := range scanner.AllScanners {
+			if c := counts[sc.Name()]; c > 0 {
+				fmt.Printf("  %s: %d\n", sc.Name(), c)
+			}
 		}
 		return nil
 	},

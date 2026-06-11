@@ -41,7 +41,7 @@ func TestSemanticSearchFlow(t *testing.T) {
 	}
 
 	// Pre-compute embeddings for all packages so search runs immediately
-	allPkgs, _ := s.List("")
+	allPkgs, _ := s.List("", false)
 	for _, p := range allPkgs {
 		text := nlp.PackageText(p.Name, p.Source, p.Description)
 		vec, err := m.embedder.Encode(context.Background(), text)
@@ -106,7 +106,7 @@ func TestStaleSearchResultIgnored(t *testing.T) {
 		t.Skip("embedder not loaded")
 	}
 
-	allPkgs, _ := s.List("")
+	allPkgs, _ := s.List("", false)
 	for _, p := range allPkgs {
 		text := nlp.PackageText(p.Name, p.Source, p.Description)
 		vec, _ := m.embedder.Encode(context.Background(), text)
