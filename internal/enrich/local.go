@@ -3,10 +3,22 @@ package enrich
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 )
+
+const defaultCmdTimeout = 30 * time.Second
+const bulkCmdTimeout = 60 * time.Second
+
+// runCmd runs a command with a timeout and returns its output.
+func runCmd(timeout time.Duration, name string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return exec.CommandContext(ctx, name, args...).Output()
+}
 
 // LocalEnricher fetches descriptions from local system sources.
 type LocalEnricher struct {
@@ -66,8 +78,7 @@ func (le *LocalEnricher) EnrichPip(names []string) map[string]string {
 	}
 
 	args := append([]string{"show"}, names...)
-	cmd := exec.Command("pip", args...)
-	out, err := cmd.Output()
+	out, err := runCmd(bulkCmdTimeout, "pip", args...)
 	if err != nil {
 		return results
 	}
@@ -100,8 +111,7 @@ func (le *LocalEnricher) whatisBatch(names []string) map[string]string {
 		return results
 	}
 
-	cmd := exec.Command("whatis", names...)
-	out, err := cmd.Output()
+	out, err := runCmd(defaultCmdTimeout, "whatis", names...)
 	if err != nil {
 		return results
 	}
@@ -145,8 +155,7 @@ func (le *LocalEnricher) dpkgBatch(names []string) map[string]string {
 	}
 
 	// Run dpkg -S for all paths
-	cmd := exec.Command("dpkg", append([]string{"-S"}, paths...)...)
-	out, err := cmd.Output()
+	out, err := runCmd(bulkCmdTimeout, "dpkg", append([]string{"-S"}, paths...)...)
 	if err != nil {
 		return results
 	}
@@ -182,9 +191,7 @@ func (le *LocalEnricher) dpkgBatch(names []string) map[string]string {
 	}
 
 	// Query dpkg for descriptions
-	cmd = exec.Command("dpkg-query", "-W", "-f=${Package}\t${Description}\n")
-	cmd.Args = append(cmd.Args, pkgNames...)
-	out, err = cmd.Output()
+	out, err = runCmd(bulkCmdTimeout, "dpkg-query", append([]string{"-W", "-f=${Package}\t${Description}\n"}, pkgNames...)...)
 	if err != nil {
 		return results
 	}
@@ -212,8 +219,7 @@ func (le *LocalEnricher) dpkgBatch(names []string) map[string]string {
 func (le *LocalEnricher) EnrichSnap(names []string) map[string]string {
 	results := make(map[string]string)
 	for _, name := range names {
-		cmd := exec.Command("snap", "info", name)
-		out, err := cmd.Output()
+		out, err := runCmd(defaultCmdTimeout, "snap", "info", name)
 		if err != nil {
 			continue
 		}
@@ -233,8 +239,7 @@ func (le *LocalEnricher) EnrichSnap(names []string) map[string]string {
 func (le *LocalEnricher) EnrichNpm(names []string) map[string]string {
 	results := make(map[string]string)
 	for _, name := range names {
-		cmd := exec.Command("npm", "info", name, "--json")
-		out, err := cmd.Output()
+		out, err := runCmd(defaultCmdTimeout, "npm", "info", name, "--json")
 		if err != nil {
 			continue
 		}
@@ -257,8 +262,7 @@ func (le *LocalEnricher) EnrichApt(names []string) map[string]string {
 		return results
 	}
 
-	cmd := exec.Command("apt", append([]string{"show"}, names...)...)
-	out, err := cmd.Output()
+	out, err := runCmd(bulkCmdTimeout, "apt", append([]string{"show"}, names...)...)
 	if err != nil {
 		return results
 	}
@@ -290,8 +294,7 @@ func (le *LocalEnricher) EnrichConda(names []string) map[string]string {
 	// This is a fallback for any missing ones.
 	results := make(map[string]string)
 	for _, name := range names {
-		cmd := exec.Command("conda", "search", "--json", name)
-		out, err := cmd.Output()
+		out, err := runCmd(defaultCmdTimeout, "conda", "search", "--json", name)
 		if err != nil {
 			continue
 		}
@@ -305,4 +308,52 @@ func (le *LocalEnricher) EnrichConda(names []string) map[string]string {
 		}
 	}
 	return results
+}
+
+// enrichSingleSnap returns the description for a single snap package.
+func (le *LocalEnricher) enrichSingleSnap(name string) (string, error) {
+	out, err := runCmd(defaultCmdTimeout, "snap", "info", name)
+	if err != nil {
+		return "", err
+	}
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "summary:") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "summary:")), nil
+		}
+	}
+	return "", nil
+}
+
+// enrichSingleNpm returns the description for a single npm package.
+func (le *LocalEnricher) enrichSingleNpm(name string) (string, error) {
+	out, err := runCmd(defaultCmdTimeout, "npm", "info", name, "--json")
+	if err != nil {
+		return "", err
+	}
+	if idx := strings.Index(string(out), `"description":"`); idx >= 0 {
+		start := idx + len(`"description":"`)
+		end := strings.Index(string(out[start:]), `"`)
+		if end >= 0 {
+			return string(out[start : start+end]), nil
+		}
+	}
+	return "", nil
+}
+
+// enrichSingleConda returns the description for a single conda package.
+func (le *LocalEnricher) enrichSingleConda(name string) (string, error) {
+	out, err := runCmd(defaultCmdTimeout, "conda", "search", "--json", name)
+	if err != nil {
+		return "", err
+	}
+	if idx := strings.Index(string(out), `"summary":"`); idx >= 0 {
+		start := idx + len(`"summary":"`)
+		end := strings.Index(string(out[start:]), `"`)
+		if end >= 0 {
+			return string(out[start : start+end]), nil
+		}
+	}
+	return "", nil
 }

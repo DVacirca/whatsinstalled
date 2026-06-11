@@ -11,19 +11,19 @@ import (
 
 // Package represents an installed package.
 type Package struct {
-	ID              int64
-	Name            string
-	Version         string
-	Source          string // apt | snap | npm | pip | conda
-	Location        string // system or absolute path
-	SizeBytes       *int64
-	Description     string
-	InstalledAt     string
-	AutoInstalled   bool
-	User            string // who installed it
-	UpdatedAt       time.Time
-	LastUsed        *time.Time // access time of package directory
-	Embedding       string     // JSON array of float64
+	ID            int64
+	Name          string
+	Version       string
+	Source        string // apt | snap | npm | pip | conda
+	Location      string // system or absolute path
+	SizeBytes     *int64
+	Description   string
+	InstalledAt   string
+	AutoInstalled bool
+	User          string // who installed it
+	UpdatedAt     time.Time
+	LastUsed      *time.Time // access time of package directory
+	Embedding     string     // JSON array of float64
 }
 
 // Store wraps the SQLite connection.
@@ -157,6 +157,18 @@ func (s *Store) Search(query, sourceFilter string) ([]Package, error) {
 	return scanRows(rows)
 }
 
+// SearchText returns packages whose name OR description matches the query
+// (case-insensitive substring). Used by the live Results-tab filter.
+func (s *Store) SearchText(query string) ([]Package, error) {
+	like := "%" + query + "%"
+	rows, err := s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used FROM packages WHERE name LIKE ? OR description LIKE ? ORDER BY name COLLATE NOCASE`, like, like)
+	if err != nil {
+		return nil, fmt.Errorf("search packages: %w", err)
+	}
+	defer rows.Close()
+	return scanRows(rows)
+}
+
 // Delete removes a package by name, source, and location.
 func (s *Store) Delete(name, source, location string) error {
 	_, err := s.db.Exec(`DELETE FROM packages WHERE name = ? AND source = ? AND location = ?`, name, source, location)
@@ -167,6 +179,16 @@ func (s *Store) Delete(name, source, location string) error {
 func (s *Store) PurgeStale(cutoff time.Time) error {
 	_, err := s.db.Exec(`DELETE FROM packages WHERE updated_at < ?`, cutoff.UnixMilli())
 	return err
+}
+
+// Count returns the total number of packages.
+func (s *Store) Count() (int, error) {
+	var total int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM packages`).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("count packages: %w", err)
+	}
+	return total, nil
 }
 
 // CountBySource returns package counts per source.

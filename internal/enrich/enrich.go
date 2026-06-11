@@ -110,51 +110,90 @@ func (e *Enricher) enrichSource(
 		names[i] = p.Name
 	}
 
-	var descMap map[string]string
-
 	switch source {
 	case "bin":
-		// Try local first: whatis + dpkg
-		descMap = e.local.EnrichBin(names)
-		// For any not found, we can't really do remote for binaries
+		descMap := e.local.EnrichBin(names)
+		for _, p := range pkgs {
+			desc := descMap[p.Name]
+			key := fmt.Sprintf("%s:%s:%s", p.Name, p.Source, p.Location)
+			mu.Lock()
+			results[key] = desc
+			mu.Unlock()
+			onProgress(source, p.Name, desc)
+		}
 	case "pip":
-		// Try local first
-		descMap = e.local.EnrichPip(names)
-		// Find remaining and try remote
+		descMap := e.local.EnrichPip(names)
 		remaining := e.remainingNames(names, descMap)
 		if len(remaining) > 0 {
+			onProgress(source, fmt.Sprintf("%d remaining", len(remaining)), "")
 			remoteMap := e.remote.EnrichPip(remaining)
 			for k, v := range remoteMap {
 				descMap[k] = v
 			}
 		}
+		for _, p := range pkgs {
+			desc := descMap[p.Name]
+			key := fmt.Sprintf("%s:%s:%s", p.Name, p.Source, p.Location)
+			mu.Lock()
+			results[key] = desc
+			mu.Unlock()
+			onProgress(source, p.Name, desc)
+		}
 	case "npm":
-		// Try local first
-		descMap = e.local.EnrichNpm(names)
-		// Find remaining and try remote
-		remaining := e.remainingNames(names, descMap)
-		if len(remaining) > 0 {
-			remoteMap := e.remote.EnrichNpm(remaining)
-			for k, v := range remoteMap {
-				descMap[k] = v
+		for _, p := range pkgs {
+			onProgress(source, p.Name, "")
+			desc, err := e.local.enrichSingleNpm(p.Name)
+			if err != nil {
+				continue
 			}
+			if desc == "" {
+				desc = e.remote.fetchNpm(p.Name)
+				if desc != "" {
+					_ = e.cache.Set(p.Name, "npm", desc)
+				}
+			}
+			key := fmt.Sprintf("%s:%s:%s", p.Name, p.Source, p.Location)
+			mu.Lock()
+			results[key] = desc
+			mu.Unlock()
+			onProgress(source, p.Name, desc)
 		}
 	case "apt":
-		descMap = e.local.EnrichApt(names)
+		descMap := e.local.EnrichApt(names)
+		for _, p := range pkgs {
+			desc := descMap[p.Name]
+			key := fmt.Sprintf("%s:%s:%s", p.Name, p.Source, p.Location)
+			mu.Lock()
+			results[key] = desc
+			mu.Unlock()
+			onProgress(source, p.Name, desc)
+		}
 	case "snap":
-		descMap = e.local.EnrichSnap(names)
+		for _, p := range pkgs {
+			onProgress(source, p.Name, "")
+			desc, err := e.local.enrichSingleSnap(p.Name)
+			if err != nil {
+				continue
+			}
+			key := fmt.Sprintf("%s:%s:%s", p.Name, p.Source, p.Location)
+			mu.Lock()
+			results[key] = desc
+			mu.Unlock()
+			onProgress(source, p.Name, desc)
+		}
 	case "conda":
-		descMap = e.local.EnrichConda(names)
-	}
-
-	// Store results
-	for _, p := range pkgs {
-		desc := descMap[p.Name]
-		key := fmt.Sprintf("%s:%s:%s", p.Name, p.Source, p.Location)
-		mu.Lock()
-		results[key] = desc
-		mu.Unlock()
-		onProgress(source, p.Name, desc)
+		for _, p := range pkgs {
+			onProgress(source, p.Name, "")
+			desc, err := e.local.enrichSingleConda(p.Name)
+			if err != nil {
+				continue
+			}
+			key := fmt.Sprintf("%s:%s:%s", p.Name, p.Source, p.Location)
+			mu.Lock()
+			results[key] = desc
+			mu.Unlock()
+			onProgress(source, p.Name, desc)
+		}
 	}
 }
 
