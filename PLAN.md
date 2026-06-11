@@ -35,7 +35,7 @@ Unique key: `(name, source, location)`
 ## Scanning Strategy
 1. **Startup:** Load from SQLite cache immediately so the UI appears fast.
 2. **Background scan:** After initial render, kick off a background scan of all managers in parallel:
-   - `apt` → parse `dpkg-query -W -f='${Package}\t${Version}\t${Installed-Size}\t${Status}\t${Auto-Installed}\n'`
+   - `apt` → parse `dpkg-query -W` for all installed packages (manual + auto dependencies)
    - `snap` → parse `snap list`
    - `npm global` → parse `npm list -g --depth=0 --json`
    - `pip global` → parse `pip list --format=json` (system Python)
@@ -80,7 +80,7 @@ Three distinct bordered regions:
 ```
 
 - **Header row:** App title + total count. Styled with subtle accent.
-- **Tab bar:** `All | Apt | Snap | Npm | Pip | Conda | Bin`. Current tab has filled background + bold. `Tab` / `Shift+Tab` cycles. Active filter input lives to the right.
+- **Tab bar:** `All | Results | Apt | Snap | Npm | Pip | Conda | Bin`. Current tab has filled background + bold. `Tab` / `Shift+Tab` cycles. Active filter input lives to the right.
 - **Table:** Main content. Columns `Name | Version | Source | Location | Size`. Sortable by pressing `s` to cycle columns (name → source → size → installed_at → name). `↑↓` (or `jk`) to navigate. Selected row is highlighted.
 - **Footer:** Context-sensitive key hints. If a row is selected, also show: `Selected: nginx (apt, system)`.
 
@@ -128,7 +128,7 @@ Three distinct bordered regions:
 - Uses `sentence-transformers/all-MiniLM-L6-v2` (22MB) via Cybertron (pure-Go transformers)
 - Embeddings are cached in SQLite; first query downloads the model, subsequent queries are ~50-200ms
 - Query and package text are embedded as 384-dimensional vectors
-- Cosine similarity > 0.3 threshold; top 20 results displayed
+- Cosine similarity > 0.3 threshold; top 20 results displayed in the **Results** tab
 - Package text is enriched with source context: "python package", "node javascript package", "debian system package", etc.
 
 ## CLI Commands (Cobra)

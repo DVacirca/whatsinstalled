@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-`installr` is a CLI/TUI tool that gives a consolidated view of packages installed on a Linux system across multiple package managers plus manually installed binaries. It tracks only **user-installed** packages (not auto-installed dependencies), shows where each package lives, who installed it, when it was last used, and allows installation and uninstallation.
+`installr` is a CLI/TUI tool that gives a consolidated view of packages installed on a Linux system across multiple package managers plus manually installed binaries. It tracks **all installed** packages (apt includes auto-installed dependencies), shows where each package lives, who installed it, when it was last used, and allows installation and uninstallation.
 
 ## 2. Supported Package Managers
 
@@ -25,7 +25,7 @@ Scans executable files in user directories:
 Filters by executable bit (`mode & 0111`).
 
 ### 2.1 Scope Rules
-- **apt**: Only manually installed packages (`apt-mark showmanual`). Exclude auto-installed dependencies.
+- **apt**: All installed packages (`dpkg-query`). Includes both manually and auto-installed dependencies.
 - **snap**: All installed snaps (no dependency concept).
 - **npm**: Top-level packages only (`--depth=0`). No transitive dependencies. Include both global (`-g`) and local projects (any directory with `package.json` at `~/*` depth 1 + CWD).
 - **pip**: Top-level packages only. Global system Python + local venvs (`.venv/`, `venv/`, `env/` at `~/*` depth 1 + CWD).
@@ -106,9 +106,10 @@ Every package must record the user who installed it:
 ```
 
 ### 6.2 Components
+- **Title bar** (top strip): App name + per-source package counts. While a background scan/refresh runs, a `⟳ updating…` indicator shows in the right corner (the full-screen splash only appears on first run, when the cache is empty).
 - **Tree panel** (main area): Hierarchical tree grouped by `location`. Group nodes show `▸`/`▾` expand/collapse indicator and child count `[N]`. Leaf nodes show package columns.
 - **Column header**: `Name Version Src Location User Size`
-- **Tab bar** (inside tree panel): `All | Apt | Snap | Npm | Pip | Conda`. Active tab highlighted.
+- **Tab bar** (inside tree panel): `All | Results | Apt | Snap | Npm | Pip | Conda | Bin`. Active tab highlighted.
 - **Filter input** (inline next to tabs): `/query█` when active.
 - **Bottom panels** (3 equal columns):
   - **Left**: Description (or location info when a group is selected).
@@ -124,7 +125,7 @@ Every package must record the user who installed it:
 | `←` / `h` | Collapse group |
 | `Tab` / `Shift+Tab` | Next / previous source tab |
 | `/` | Start filter input |
-| `?` | Start semantic search (natural language query) |
+| `?` | Open live package search (name/description filter → Results tab) |
 | `Esc` | Clear filter / close detail / cancel confirm / cancel search |
 | `Enter` / `d` | Show detail view (highlights Description panel) |
 | `i` | Install a package (prompts for package name) |
@@ -134,13 +135,19 @@ Every package must record the user who installed it:
 | `r` | Force rescan all managers (background) |
 | `q` / `Ctrl+C` | Quit |
 
-### 6.6 Semantic Search
-Press `?` to open a centered modal and type a natural language query:
-- "which python based tools do i have available?"
-- "web servers"
-- "javascript build tools"
+### 6.6 Search
+Press `?` to open a centered "Search packages" modal and type a query. It is a
+**live substring filter** (case-insensitive, matches package **name or
+description**), updating as you type:
+- The modal previews the match count and the first matches.
+- "No matches" is shown when nothing matches.
+- Matches populate the **Results** tab only (other tabs are unchanged).
+- `Enter` closes the modal and switches to the Results tab; `Esc` cancels and
+  clears the filter.
 
-The query is embedded with `sentence-transformers/all-MiniLM-L6-v2` (384-dim) and matched against cached package embeddings using cosine similarity. Results are ranked by score (> 0.3 threshold) and displayed in the tree. A modal shows "⟳ Searching..." while the query runs. Embeddings are cached in SQLite for sub-second subsequent queries.
+(An embedding-based semantic search was prototyped — see the `embedding` column
+and `internal/nlp` — but the live substring filter replaced it as the default
+because it is instant and predictable.)
 
 ### 6.4 Detail View
 - Pressing `d` highlights the Description panel title (`▸ Description`).
