@@ -1207,7 +1207,7 @@ func (m *model) renderHelpPanel(w, h int) string {
 		{"←→ / hl", "Expand"},
 		{"Tab", "Switch source"},
 		{"/", "Filter"},
-		{"?", "Ask · exp"},
+		{"?", "Ask (experimental)"},
 		{":", "Command"},
 		{"t", "Theme"},
 		{"d", "Details"},
