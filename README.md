@@ -5,7 +5,8 @@ system — across every package manager, language ecosystem, and loose binaries 
 so the graveyard of tools you've accumulated stops being invisible.
 
 For each package it shows the **source** it came from, **where** it lives, **who**
-installed it, and **when it was last used**. It also answers natural-language
+installed it, its **on-disk size**, and when it was **added** / **last used**
+(size, added and used are filled in where they can be measured reliably). It also answers natural-language
 questions like _"which python tools do I have?"_ via a small local LLM
 (experimental).
 

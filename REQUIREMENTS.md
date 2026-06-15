@@ -39,14 +39,15 @@ Each package record must include:
 |-------|------|-------|
 | `name` | string | Package name |
 | `version` | string | Installed version |
-| `source` | string | `apt`, `snap`, `npm`, `pip`, `conda`, `bin` |
+| `source` | string | one of the 21 supported managers (`apt`, `snap`, `npm`, `pip`, `conda`, `bin`, `pixi`, `pipx`, `uv`, `go`, `docker`, `podman`, `brew`, `cargo`, `gem`, `pnpm`, `yarn`, `pacman`, `yay`, `flatpak`, `nix`, `appimage`) |
 | `location` | string | `system` or path/env name |
 | `size_bytes` | int64? | Disk usage if available |
 | `description` | string | One-line summary if available |
 | `installed_at` | string | ISO8601 or empty |
 | `user` | string | Who installed it (see §4) |
 | `auto_installed` | bool | `true` for apt dependency packages (`apt-mark showmanual`); hidden by default, toggle with `a` |
-| `last_used` | time? | Access time of the package directory |
+| `last_used` | time? | Access time of the package files (atime; unreliable on `noatime`/`relatime` mounts) |
+| `added_at` | time? | Modification time of the package files (mtime; reliable install/update signal) |
 | `embedding` | string | JSON float64 array for semantic search (cached) |
 
 **Unique key**: `(name, source, location)`
@@ -108,12 +109,16 @@ Every package must record the user who installed it:
 ### 6.2 Components
 - **Title bar** (top strip): App name + per-source package counts. While a background scan/refresh runs, a `⟳ updating…` indicator shows in the right corner (the full-screen splash only appears on first run, when the cache is empty).
 - **Tree panel** (main area): Hierarchical tree grouped by `location`. Group nodes show `▸`/`▾` expand/collapse indicator and child count `[N]`. Leaf nodes show package columns.
-- **Column header**: `Name Version Src Location User Size`
-- **Tab bar** (inside tree panel): `All | Results | Apt | Snap | Npm | Pip | Conda | Bin`. Active tab highlighted.
+- **Column header**: `Name Version Src Location User Size Added Used`. `Size`/`Added`
+  are populated only where the path resolves to the package's own files (file
+  stat for bin/cargo/appimage, `du` of dedicated venvs for pipx/uv, native
+  metadata for apt and docker/podman); shared-container sources show `-` rather
+  than a misleading per-package number. `Added`/`Used` render as a compact age.
+- **Tab bar** (inside tree panel): `All` first, then one tab per source **in alphabetical order** (only sources with packages appear; `Results` is prepended after a semantic search). Active tab highlighted.
 - **Filter input** (inline next to tabs): `/query█` when active.
 - **Bottom panels** (3 equal columns):
   - **Left**: Description (or location info when a group is selected).
-  - **Center**: Metadata key-value pairs (Name, Version, Source, Location, User, Size).
+  - **Center**: Metadata key-value pairs (Name, Version, Source, Location, User, Size, Added, Last Used).
   - **Right**: Keybindings reference.
 - **Status bar** (bottom strip): Context info — selected package, scanning state, or errors.
 

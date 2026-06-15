@@ -26,7 +26,8 @@ SQLite table `packages` (cached view of what is installed):
 | installed_at | TEXT (ISO8601) | null if unavailable |
 | auto_installed | INTEGER (0/1) | apt dependency flag |
 | updated_at | INTEGER (Unix ms) | when the row was last refreshed |
-| last_used | INTEGER | Unix ms access time of package directory |
+| last_used | INTEGER | Unix ms access time (atime) of package files; unreliable on noatime mounts |
+| added_at | INTEGER | Unix ms mtime of package files; reliable install/update time |
 | embedding | TEXT | JSON float64 array for semantic search |
 | user | TEXT | who installed the package |
 
