@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"installr/internal/store"
+	"whatsinstalled/internal/store"
 )
 
 // TestSearchModeKeys verifies that the search modal handles keys correctly.

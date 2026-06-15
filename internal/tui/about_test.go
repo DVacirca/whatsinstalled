@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"installr/internal/version"
+	"whatsinstalled/internal/version"
 )
 
 // TestAboutModalContent verifies the About modal shows the name, version, author
@@ -13,7 +13,7 @@ func TestAboutModalContent(t *testing.T) {
 	out := aboutModalContent(54)
 
 	for _, want := range []string{
-		"installr",
+		"whatsinstalled",
 		version.Version,
 		"Dante Vacirca",
 		"Claude",

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"installr/internal/store"
+	"whatsinstalled/internal/store"
 )
 
 // treeNode is either a group (location) or a leaf (package).
@@ -140,18 +140,6 @@ func (tv *treeView) moveCursor(delta int) {
 	}
 	if tv.cursor >= len(tv.flat) {
 		tv.cursor = len(tv.flat) - 1
-	}
-}
-
-func (tv *treeView) setCursorToPkg(name, source, location string) {
-	for i, n := range tv.flat {
-		if !n.isGroup && n.pkg != nil {
-			p := n.pkg
-			if p.Name == name && p.Source == source && p.Location == location {
-				tv.cursor = i
-				return
-			}
-		}
 	}
 }
 

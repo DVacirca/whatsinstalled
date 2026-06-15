@@ -147,13 +147,13 @@ func currentThemeIndex() int {
 	return 0
 }
 
-// themeDir returns the config directory for installr.
+// themeDir returns the config directory for whatsinstalled.
 func themeDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".config", "installr")
+	return filepath.Join(home, ".config", "whatsinstalled")
 }
 
 // LoadThemeName reads the persisted theme name from config.
@@ -198,8 +198,6 @@ var (
 	accent    lipgloss.Color
 	purple    lipgloss.Color
 	orange    lipgloss.Color
-	green     lipgloss.Color
-	red       lipgloss.Color
 )
 
 // ── Style vars (set by applyTheme) ──
@@ -222,8 +220,6 @@ var (
 	sectionRuleStyle   lipgloss.Style
 	filterStyle        lipgloss.Style
 	statusBarStyle     lipgloss.Style
-	confirmStyle       lipgloss.Style
-	confirmKeyStyle    lipgloss.Style
 	modalBorderStyle   lipgloss.Style
 	modalTitleStyle    lipgloss.Style
 	modalInputStyle    lipgloss.Style
@@ -242,8 +238,6 @@ func applyTheme(t Theme) {
 	accent = t.Accent
 	purple = t.Purple
 	orange = t.Orange
-	green = t.Green
-	red = t.Red
 
 	shellStyle = lipgloss.NewStyle()
 
@@ -307,15 +301,6 @@ func applyTheme(t Theme) {
 		Foreground(fgBright).
 		Padding(0, 1)
 
-	confirmStyle = lipgloss.NewStyle().
-		Foreground(red).
-		Bold(true).
-		Padding(0, 1)
-
-	confirmKeyStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(green)
-
 	modalBorderStyle = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(accent).
@@ -376,18 +361,6 @@ func truncate(s string, max int) string {
 		return s[:max]
 	}
 	return s[:max-3] + "..."
-}
-
-// clipLines truncates a string to at most n lines.
-func clipLines(s string, n int) string {
-	if n <= 0 {
-		return ""
-	}
-	lines := strings.Split(s, "\n")
-	if len(lines) <= n {
-		return s
-	}
-	return strings.Join(lines[:n], "\n")
 }
 
 func min(a, b int) int {

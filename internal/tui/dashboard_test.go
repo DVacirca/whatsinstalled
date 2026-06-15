@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"installr/internal/nlp"
-	"installr/internal/store"
+	"whatsinstalled/internal/nlp"
+	"whatsinstalled/internal/store"
 )
 
 // TestSemanticSearchFlow tests the full TUI semantic search pipeline.
