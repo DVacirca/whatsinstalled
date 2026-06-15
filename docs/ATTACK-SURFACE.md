@@ -34,28 +34,9 @@ displays.
 - The live scan/enrich path builds subprocesses from **argument slices, not a shell**, so there is no classic shell-string injection on that path.
 - Registry calls use the default `http.Client` with **TLS verification on** and a 10 s timeout (`internal/enrich/remote.go`).
 
-```mermaid
-graph LR
-    subgraph untrusted["Untrusted inputs"]
-        DIRS["scanned dirs and binaries<br/>home .venv bin pip, CWD, PATH"]
-        META["package metadata<br/>names, versions, descriptions"]
-        NET["registries<br/>PyPI, npm, crates.io, rubygems"]
-        MODEL["embedding model<br/>HuggingFace download"]
-    end
-
-    APP["whatsinstalled process<br/>user privileges"]
-
-    subgraph sinks["Sinks"]
-        TERM["terminal - TUI render"]
-        DB["~/.whatsinstalled.db"]
-    end
-
-    DIRS -->|exec discovered binary| APP
-    META -->|stored and rendered| APP
-    NET  -->|HTTP GET to JSON| APP
-    MODEL -->|loaded into process| APP
-    APP --> TERM
-    APP --> DB
+```
+Attack-surface diagram — see git history for Mermaid source.
+Untrusted inputs → whatsinstalled process → Sinks (terminal, DB).
 ```
 
 ---

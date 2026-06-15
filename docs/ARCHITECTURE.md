@@ -16,33 +16,9 @@ query reduces to a single in-memory vector ranking.
 End-to-end pipeline: **Scan → Enrich → Embed → Search → Display**. SQLite is the
 hub every stage reads from and writes back to.
 
-```mermaid
-graph TD
-    subgraph init["Initialisation pipeline - fullInitWithProgress"]
-        SCAN["SCAN - 22 package managers, parallel goroutines<br/>Scan returns slice of store.Package"]
-        ENRICH["ENRICHMENT - local tools + remote registries<br/>30-day SQLite cache"]
-        EMBED["NLP / EMBEDDING - all-MiniLM-L6-v2, 384-dim<br/>cybertron (pure Go)"]
-    end
-
-    STORE["STORE - SQLite WAL<br/>~/.whatsinstalled.db<br/>packages + enrichment cache"]
-
-    subgraph runtime["Runtime"]
-        SEARCH["search.Rank - cosine similarity, keyword boost 0<br/>threshold 0.05, TopK 50"]
-        TUI["TUI DASHBOARD - Bubble Tea<br/>tree view, source tabs, overlays"]
-    end
-
-    EVAL["EVAL HARNESS - MRR, Hit@1/3/10<br/>curated + synthetic, baseline diff"]
-
-    SCAN   -->|Upsert / PurgeStale| STORE
-    STORE  -->|ListWithoutDescriptions| ENRICH
-    ENRICH -->|UpdateManyDescriptions| STORE
-    STORE  -->|ListWithoutEmbeddings| EMBED
-    EMBED  -->|UpdateEmbedding| STORE
-
-    STORE  -->|ListWithEmbeddings| SEARCH
-    EMBED  -->|encode query to queryVec| SEARCH
-    SEARCH -->|Result slice to display| TUI
-    SEARCH ---|shared search.Rank, queries + options| EVAL
+```
+Data-flow diagram — see git history for Mermaid source.
+Scan → Enrich → Embed → Search → Display, all through SQLite.
 ```
 
 > The diagram above is the canonical architecture picture, migrated from the
@@ -96,33 +72,9 @@ internal/version     — const Version = "v1.0.0-beta"
 The dashboard was split out of a single 1.8k-line file into cohesive units that
 map onto Bubble Tea's `Init` / `Update` / `View` contract.
 
-```mermaid
-graph LR
-    RUN["app.go - Run, builds and starts tea.Program"]
-
-    subgraph loop["Bubble Tea loop"]
-        INIT["Init"]
-        UPDATE["Update msg - routes keys by mode"]
-        VIEW["View - renders overlays"]
-    end
-
-    MODEL["model.go - state and message types"]
-    CMDS["commands.go - loadData, fullInitWithProgress<br/>startSearch, runSearch, liveSearch"]
-    PALETTE["palette.go - command palette"]
-    PANELS["panels.go - detail, help, status, About"]
-    TREE["tree.go - tree view, 8 columns"]
-    STYLES["styles.go - 7 themes, format helpers"]
-
-    RUN --> INIT
-    INIT -->|tea.Cmd| CMDS
-    UPDATE -->|tea.Cmd| CMDS
-    CMDS -->|tea.Msg| UPDATE
-    UPDATE --> MODEL
-    VIEW --> PANELS
-    VIEW --> TREE
-    VIEW --> PALETTE
-    PANELS --> STYLES
-    TREE --> STYLES
+```
+TUI structure diagram — see git history for Mermaid source.
+app.go → Init → Update → View; commands.go drives background work.
 ```
 
 All background work (scan, enrich, embed, search) is dispatched as a `tea.Cmd`
