@@ -369,6 +369,76 @@ func (le *LocalEnricher) EnrichPacman(names []string) map[string]string {
 	return parsePacmanInfo(out)
 }
 
+// EnrichGem gets descriptions for Ruby gems using `gem list --details`,
+// which returns descriptions inline for all installed gems in one call.
+func (le *LocalEnricher) EnrichGem(names []string) map[string]string {
+	results := make(map[string]string)
+	if len(names) == 0 {
+		return results
+	}
+	out, err := runCmd(bulkCmdTimeout, "gem", "list", "--details")
+	if err != nil {
+		return results
+	}
+	return parseGemDetails(out)
+}
+
+// parseGemDetails extracts name -> description from `gem list --details` output.
+// Each gem block looks like:
+//
+//	rake (13.0.6)
+//	    Author: Hiroshi SHIBATA
+//	    ...
+//	    Rake is a Make-like program implemented in Ruby
+func parseGemDetails(out []byte) map[string]string {
+	results := make(map[string]string)
+	lines := strings.Split(string(out), "\n")
+	var currentName string
+	var descLines []string
+	for _, line := range lines {
+		// Blank lines never reset the current gem — they're just spacing.
+		if line == "" {
+			continue
+		}
+		if !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") {
+			// Gem name line: "rake (13.0.6)" — flush previous.
+			if currentName != "" && len(descLines) > 0 {
+				results[currentName] = strings.TrimSpace(strings.Join(descLines, " "))
+			}
+			if idx := strings.Index(line, " ("); idx > 0 {
+				currentName = line[:idx]
+			}
+			descLines = nil
+			continue
+		}
+		// Indented line — could be metadata or description
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		// Skip metadata lines (Author:, Homepage:, Licenses:, Installed at:)
+		if strings.HasPrefix(trimmed, "Author") ||
+			strings.HasPrefix(trimmed, "Homepage") ||
+			strings.HasPrefix(trimmed, "License") ||
+			strings.HasPrefix(trimmed, "Installed at") ||
+			strings.HasPrefix(trimmed, "Current version") ||
+			strings.HasPrefix(trimmed, "Required Ruby") ||
+			strings.HasPrefix(trimmed, "Required RubyGems") ||
+			strings.HasPrefix(trimmed, "Binary") ||
+			strings.HasPrefix(trimmed, "Bindir") {
+			continue
+		}
+		if currentName != "" {
+			descLines = append(descLines, trimmed)
+		}
+	}
+	// Flush the last block
+	if currentName != "" && len(descLines) > 0 {
+		results[currentName] = strings.TrimSpace(strings.Join(descLines, " "))
+	}
+	return results
+}
+
 // parsePacmanInfo extracts name -> description from `pacman -Qi` output, which
 // lists "Name : x" / "Description : y" pairs in per-package blocks.
 func parsePacmanInfo(out []byte) map[string]string {

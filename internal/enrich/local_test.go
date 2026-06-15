@@ -67,3 +67,52 @@ func TestDescMapUnknownSource(t *testing.T) {
 		}
 	}
 }
+
+func TestParseGemDetails(t *testing.T) {
+	out := []byte(`abbrev (0.1.1)
+    Author: Akinori MUSHO
+    Homepage: https://github.com/ruby/abbrev
+    Licenses: Ruby, BSD-2-Clause
+    Installed at (default): /usr/lib/ruby/gems/3.2.0
+
+    Calculates a set of unique abbreviations for a given set of strings
+
+base64 (0.1.1)
+    Author: Yusuke Endoh
+    Homepage: https://github.com/ruby/base64
+    Licenses: Ruby, BSD-2-Clause
+    Installed at (default): /usr/lib/ruby/gems/3.2.0
+
+    Support for encoding and decoding binary data using a Base64 representation
+
+rake (13.0.6)
+    Authors: Hiroshi SHIBATA, Eric Hodel, Jim Weirich
+    Homepage: https://github.com/ruby/rake
+    Installed at: /usr/lib/ruby/gems/3.2.0
+
+    Rake is a Make-like program implemented in Ruby
+`)
+
+	got := parseGemDetails(out)
+	if got["abbrev"] != "Calculates a set of unique abbreviations for a given set of strings" {
+		t.Fatalf("abbrev = %q", got["abbrev"])
+	}
+	if got["base64"] != "Support for encoding and decoding binary data using a Base64 representation" {
+		t.Fatalf("base64 = %q", got["base64"])
+	}
+	if got["rake"] != "Rake is a Make-like program implemented in Ruby" {
+		t.Fatalf("rake = %q", got["rake"])
+	}
+	if len(got) != 3 {
+		t.Fatalf("expected 3 gems, got %d: %v", len(got), got)
+	}
+}
+
+func TestParseGemDetailsEmpty(t *testing.T) {
+	if got := parseGemDetails([]byte("")); len(got) != 0 {
+		t.Fatalf("empty input = %v", got)
+	}
+	if got := parseGemDetails([]byte("no gems here\n")); len(got) != 0 {
+		t.Fatalf("no-match input = %v", got)
+	}
+}

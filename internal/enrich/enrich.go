@@ -159,7 +159,13 @@ func (e *Enricher) descMapForSource(source string, names []string) map[string]st
 	case "cargo":
 		return e.remote.EnrichCargo(names)
 	case "gem":
-		return e.remote.EnrichGem(names)
+		descMap := e.local.EnrichGem(names)
+		if remaining := e.remainingNames(names, descMap); len(remaining) > 0 {
+			for k, v := range e.remote.EnrichGem(remaining) {
+				descMap[k] = v
+			}
+		}
+		return descMap
 	default:
 		return map[string]string{}
 	}

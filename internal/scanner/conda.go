@@ -104,9 +104,13 @@ func (s CondaScanner) scanEnv(envPath string) ([]store.Package, error) {
 			User:      owner,
 		}
 
-		// Try METADATA file for description
+		// Try METADATA file for description (Python packages)
 		if sitePkgDir != "" {
 			p.Description = s.readCondaMetadata(sitePkgDir, r.Name)
+		}
+		// Try about.json from the conda package directory (all package types)
+		if p.Description == "" {
+			p.Description = s.readCondaAboutJSON(envPath, r.Name, r.Version, r.BuildString)
 		}
 		if p.Description == "" && r.Channel != "" {
 			p.Description = fmt.Sprintf("channel: %s", r.Channel)
@@ -170,3 +174,42 @@ func (s CondaScanner) parseMetadataSummary(r io.Reader) string {
 }
 
 var _ Scanner = CondaScanner{}
+
+// readCondaAboutJSON reads the summary/description from a conda package's
+// about.json file, which exists for all package types (Python, R, C libs, etc.).
+// Path: <env>/conda-meta/<name>-<version>-<build>.json → extracted_package_dir
+// → info/about.json.
+func (s CondaScanner) readCondaAboutJSON(envPath, name, version, build string) string {
+	metaPath := filepath.Join(envPath, "conda-meta", name+"-"+version+"-"+build+".json")
+	metaF, err := os.Open(metaPath)
+	if err != nil {
+		return ""
+	}
+	defer metaF.Close()
+
+	var meta struct {
+		ExtractedPkgDir string `json:"extracted_package_dir"`
+	}
+	if json.NewDecoder(metaF).Decode(&meta) != nil || meta.ExtractedPkgDir == "" {
+		return ""
+	}
+
+	aboutPath := filepath.Join(meta.ExtractedPkgDir, "info", "about.json")
+	aboutF, err := os.Open(aboutPath)
+	if err != nil {
+		return ""
+	}
+	defer aboutF.Close()
+
+	var about struct {
+		Summary     string `json:"summary"`
+		Description string `json:"description"`
+	}
+	if json.NewDecoder(aboutF).Decode(&about) != nil {
+		return ""
+	}
+	if about.Summary != "" {
+		return about.Summary
+	}
+	return about.Description
+}
