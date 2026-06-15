@@ -190,11 +190,24 @@ func (s PipScanner) scanWithPip(pipBin, location string) ([]store.Package, error
 			Description:   info.Desc,
 			AutoInstalled: info.IsDependency,
 		}
-		// Determine package directory for last-used
+		// Use the actual install path from pip show when available
+		if info.Location != "" {
+			p.Location = info.Location
+		}
+		// Determine package directory for last-used and size
 		var pkgDir string
-		if location == "system" {
-			pkgDir = filepath.Join("/usr/local/lib", "python3", "dist-packages", r.Name)
-		} else {
+		if info.Location != "" {
+			// Package might be name/ (directory) or name.py (single file)
+			pkgDir = filepath.Join(info.Location, r.Name)
+			if _, err := os.Stat(pkgDir); os.IsNotExist(err) {
+				pyPath := filepath.Join(info.Location, r.Name+".py")
+				if _, err := os.Stat(pyPath); err == nil {
+					pkgDir = pyPath
+				} else {
+					pkgDir = ""
+				}
+			}
+		} else if location != "system" {
 			for _, venvName := range []string{".venv", "venv", "env"} {
 				venvPath := filepath.Join(location, venvName)
 				candidate := filepath.Join(venvPath, "lib")
@@ -213,16 +226,18 @@ func (s PipScanner) scanWithPip(pipBin, location string) ([]store.Package, error
 		}
 		if pkgDir != "" {
 			p.LastUsed = pkg.GetLastUsed(pkgDir)
+			p.SizeBytes = pkg.PathSize(pkgDir)
 		}
 		pkgs = append(pkgs, p)
 	}
 	return pkgs, nil
 }
 
-// pipShowResult holds the description and dependency status of a pip package.
+// pipShowResult holds the description, dependency status, and install path of a pip package.
 type pipShowResult struct {
-	Desc          string
-	IsDependency  bool
+	Desc         string
+	IsDependency bool
+	Location     string // e.g. /usr/lib/python3/dist-packages
 }
 
 // pipShowDescriptions runs pip show for all packages and extracts summary and dependency info.
@@ -249,7 +264,7 @@ func (s PipScanner) pipShowDescriptions(pipBin string, raw []struct {
 		return result
 	}
 
-	var currentName, currentDesc string
+	var currentName, currentDesc, currentLocation string
 	currentIsDep := false
 	scanner := bufio.NewScanner(bytes.NewReader(out))
 	for scanner.Scan() {
@@ -259,22 +274,27 @@ func (s PipScanner) pipShowDescriptions(pipBin string, raw []struct {
 				r := result[currentName]
 				r.Desc = currentDesc
 				r.IsDependency = currentIsDep
+				r.Location = currentLocation
 				result[currentName] = r
 			}
 			currentName = strings.TrimSpace(strings.TrimPrefix(line, "Name: "))
 			currentDesc = ""
 			currentIsDep = false
+			currentLocation = ""
 		} else if strings.HasPrefix(line, "Summary: ") {
 			currentDesc = strings.TrimSpace(strings.TrimPrefix(line, "Summary: "))
 		} else if strings.HasPrefix(line, "Required-by: ") {
 			requiredBy := strings.TrimSpace(strings.TrimPrefix(line, "Required-by: "))
 			currentIsDep = requiredBy != "" && requiredBy != "N/A"
+		} else if strings.HasPrefix(line, "Location: ") {
+			currentLocation = strings.TrimSpace(strings.TrimPrefix(line, "Location: "))
 		}
 	}
 	if currentName != "" {
 		r := result[currentName]
 		r.Desc = currentDesc
 		r.IsDependency = currentIsDep
+		r.Location = currentLocation
 		result[currentName] = r
 	}
 

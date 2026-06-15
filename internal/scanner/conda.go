@@ -126,10 +126,11 @@ func (s CondaScanner) scanEnv(envPath string) ([]store.Package, error) {
 			pkgDir = filepath.Join(sitePkgDir, r.Name)
 		}
 		if pkgDir == "" {
-			pkgDir = filepath.Join(envPath, "pkgs", r.Name+"-"+r.Version)
+			pkgDir = filepath.Join(envPath, "pkgs", r.Name+"-"+r.Version+"-"+r.BuildString)
 		}
 		if pkgDir != "" {
 			p.LastUsed = pkg.GetLastUsed(pkgDir)
+			p.SizeBytes = pkg.PathSize(pkgDir)
 		}
 		pkgs = append(pkgs, p)
 	}

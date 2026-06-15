@@ -80,7 +80,7 @@ func (s NpmScanner) scanLocation(location, dir string, global bool) ([]store.Pac
 	args := []string{"list", "--depth=0", "--json"}
 	if global {
 		args = append(args, "-g")
-		location = "system"
+		location = npmGlobalDir()
 	}
 	cmd := exec.Command("npm", args...)
 	if !global && dir != "" {
@@ -140,6 +140,7 @@ func (s NpmScanner) scanLocation(location, dir string, global bool) ([]store.Pac
 		}
 		if pkgDir != "" {
 			p.LastUsed = pkg.GetLastUsed(pkgDir)
+			p.SizeBytes = pkg.PathSize(pkgDir)
 		}
 		pkgs = append(pkgs, p)
 	}

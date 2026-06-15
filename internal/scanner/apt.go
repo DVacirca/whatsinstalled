@@ -74,7 +74,7 @@ func (s AptScanner) scanAll() ([]store.Package, error) {
 			Name:     fields[0],
 			Version:  fields[1],
 			Source:   "apt",
-			Location: "system",
+			Location: "/var/lib/dpkg",
 			User:     "system",
 		}
 		// Auto-installed = present in dpkg but not explicitly chosen by the
