@@ -19,16 +19,14 @@ hub every stage reads from and writes back to.
 ```mermaid
 flowchart TD
     subgraph init["Initialisation pipeline - fullInitWithProgress"]
-        direction TB
         SCAN["SCAN - 22 package managers, parallel goroutines<br/>Scan returns slice of store.Package"]
         ENRICH["ENRICHMENT - local tools + remote registries<br/>30-day SQLite cache"]
         EMBED["NLP / EMBEDDING - all-MiniLM-L6-v2, 384-dim<br/>cybertron (pure Go)"]
     end
 
-    STORE[("STORE - SQLite WAL<br/>~/.whatsinstalled.db<br/>packages + enrichment cache")]
+    STORE["STORE - SQLite WAL<br/>~/.whatsinstalled.db<br/>packages + enrichment cache"]
 
     subgraph runtime["Runtime"]
-        direction TB
         SEARCH["search.Rank - cosine similarity, keyword boost 0<br/>threshold 0.05, TopK 50"]
         TUI["TUI DASHBOARD - Bubble Tea<br/>tree view, source tabs, overlays"]
     end
@@ -44,23 +42,7 @@ flowchart TD
     STORE  -->|ListWithEmbeddings| SEARCH
     EMBED  -->|encode query to queryVec| SEARCH
     SEARCH -->|Result slice to display| TUI
-    SEARCH <-->|shared search.Rank, queries + options| EVAL
-
-    classDef scan   fill:#0b3d5c,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px
-    classDef store  fill:#5b3a00,stroke:#f59e0b,color:#fff7ed,stroke-width:2px
-    classDef enrich fill:#0b3d2e,stroke:#34d399,color:#dcfce7,stroke-width:1px
-    classDef embed  fill:#3b1f5e,stroke:#a78bfa,color:#f3e8ff,stroke-width:1px
-    classDef search fill:#0e3a3a,stroke:#2dd4bf,color:#ccfbf1,stroke-width:1px
-    classDef tui    fill:#1e2a5a,stroke:#818cf8,color:#e0e7ff,stroke-width:1px
-    classDef eval   fill:#3a3a3a,stroke:#9ca3af,color:#f3f4f6,stroke-width:1px
-
-    class SCAN scan
-    class STORE store
-    class ENRICH enrich
-    class EMBED embed
-    class SEARCH search
-    class TUI tui
-    class EVAL eval
+    SEARCH ---|shared search.Rank, queries + options| EVAL
 ```
 
 > The diagram above is the canonical architecture picture, migrated from the
@@ -141,11 +123,6 @@ flowchart LR
     VIEW --> PALETTE
     PANELS --> STYLES
     TREE --> STYLES
-
-    classDef f fill:#1e2a5a,stroke:#818cf8,color:#e0e7ff
-    classDef m fill:#0e3a3a,stroke:#2dd4bf,color:#ccfbf1
-    class RUN,INIT,UPDATE,VIEW,MODEL,PALETTE,PANELS,TREE,STYLES f
-    class CMDS m
 ```
 
 All background work (scan, enrich, embed, search) is dispatched as a `tea.Cmd`

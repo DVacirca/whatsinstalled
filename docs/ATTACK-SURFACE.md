@@ -56,13 +56,6 @@ flowchart LR
     MODEL -->|loaded into process| APP
     APP --> TERM
     APP --> DB
-
-    classDef u fill:#5b1a1a,stroke:#f87171,color:#fee2e2
-    classDef a fill:#1e2a5a,stroke:#818cf8,color:#e0e7ff
-    classDef s fill:#0b3d2e,stroke:#34d399,color:#dcfce7
-    class DIRS,META,NET,MODEL u
-    class APP a
-    class TERM,DB s
 ```
 
 ---
