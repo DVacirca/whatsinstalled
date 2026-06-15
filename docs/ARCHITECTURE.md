@@ -18,33 +18,33 @@ hub every stage reads from and writes back to.
 
 ```mermaid
 flowchart TD
-    subgraph init["Initialisation pipeline · fullInitWithProgress"]
+    subgraph init["Initialisation pipeline - fullInitWithProgress"]
         direction TB
-        SCAN["SCAN<br/>22 package managers · parallel goroutines<br/>Scan() → []store.Package"]
-        ENRICH["ENRICHMENT<br/>local tools + remote registries<br/>30-day SQLite cache"]
-        EMBED["NLP / EMBEDDING<br/>all-MiniLM-L6-v2 · 384-dim<br/>cybertron (pure Go)"]
+        SCAN["SCAN - 22 package managers, parallel goroutines<br/>Scan returns slice of store.Package"]
+        ENRICH["ENRICHMENT - local tools + remote registries<br/>30-day SQLite cache"]
+        EMBED["NLP / EMBEDDING - all-MiniLM-L6-v2, 384-dim<br/>cybertron (pure Go)"]
     end
 
-    STORE[("STORE · SQLite WAL<br/>~/.whatsinstalled.db<br/>packages + enrichment_cache")]
+    STORE[("STORE - SQLite WAL<br/>~/.whatsinstalled.db<br/>packages + enrichment cache")]
 
     subgraph runtime["Runtime"]
         direction TB
-        SEARCH["search.Rank()<br/>cosine similarity (keyword boost 0)<br/>threshold 0.05 · TopK 50"]
-        TUI["TUI DASHBOARD · Bubble Tea<br/>tree view · source tabs · overlays"]
+        SEARCH["search.Rank - cosine similarity, keyword boost 0<br/>threshold 0.05, TopK 50"]
+        TUI["TUI DASHBOARD - Bubble Tea<br/>tree view, source tabs, overlays"]
     end
 
-    EVAL["EVAL HARNESS<br/>MRR · Hit@1 / 3 / 10<br/>curated + synthetic · baseline diff"]
+    EVAL["EVAL HARNESS - MRR, Hit@1/3/10<br/>curated + synthetic, baseline diff"]
 
-    SCAN   -->|"Upsert() · PurgeStale()"| STORE
-    STORE  -->|"ListWithoutDescriptions()"| ENRICH
-    ENRICH -->|"UpdateManyDescriptions()"| STORE
-    STORE  -->|"ListWithoutEmbeddings()"| EMBED
-    EMBED  -->|"UpdateEmbedding()"| STORE
+    SCAN   -->|Upsert / PurgeStale| STORE
+    STORE  -->|ListWithoutDescriptions| ENRICH
+    ENRICH -->|UpdateManyDescriptions| STORE
+    STORE  -->|ListWithoutEmbeddings| EMBED
+    EMBED  -->|UpdateEmbedding| STORE
 
-    STORE  -->|"ListWithEmbeddings()"| SEARCH
-    EMBED  -->|"encode(query) → queryVec"| SEARCH
-    SEARCH -->|"Result[] → display"| TUI
-    SEARCH <-->|"shared search.Rank() · queries + options"| EVAL
+    STORE  -->|ListWithEmbeddings| SEARCH
+    EMBED  -->|encode query to queryVec| SEARCH
+    SEARCH -->|Result slice to display| TUI
+    SEARCH <-->|shared search.Rank, queries + options| EVAL
 
     classDef scan   fill:#0b3d5c,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px
     classDef store  fill:#5b3a00,stroke:#f59e0b,color:#fff7ed,stroke-width:2px
@@ -116,20 +116,20 @@ map onto Bubble Tea's `Init` / `Update` / `View` contract.
 
 ```mermaid
 flowchart LR
-    RUN["app.go · Run()<br/>builds & starts tea.Program"]
+    RUN["app.go - Run, builds and starts tea.Program"]
 
     subgraph loop["Bubble Tea loop"]
-        INIT["Init()"]
-        UPDATE["Update(msg)<br/>routes keys by mode"]
-        VIEW["View()<br/>+ overlay renderers"]
+        INIT["Init"]
+        UPDATE["Update msg - routes keys by mode"]
+        VIEW["View - renders overlays"]
     end
 
-    MODEL["model.go<br/>state + message types"]
-    CMDS["commands.go<br/>loadData · fullInitWithProgress<br/>startSearch · runSearch · liveSearch"]
-    PALETTE["palette.go<br/>command palette"]
-    PANELS["panels.go<br/>detail · help · status · About"]
-    TREE["tree.go<br/>tree view · 8 columns"]
-    STYLES["styles.go<br/>7 themes + format helpers"]
+    MODEL["model.go - state and message types"]
+    CMDS["commands.go - loadData, fullInitWithProgress<br/>startSearch, runSearch, liveSearch"]
+    PALETTE["palette.go - command palette"]
+    PANELS["panels.go - detail, help, status, About"]
+    TREE["tree.go - tree view, 8 columns"]
+    STYLES["styles.go - 7 themes, format helpers"]
 
     RUN --> INIT
     INIT -->|tea.Cmd| CMDS
