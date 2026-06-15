@@ -231,7 +231,11 @@ func (tv *treeView) renderLeafNode(n *treeNode, selected bool, width int) string
 	availWidth := width - lipgloss.Width(indent)
 	cols := calcColumnWidths(availWidth)
 
-	name := truncate(p.Name, cols.name)
+	name := p.Name
+	if p.AutoInstalled {
+		name = "\u21b3 " + name
+	}
+	name = truncate(name, cols.name)
 	ver := truncate(p.Version, cols.ver)
 	src := truncate(p.Source, cols.src)
 	loc := truncate(p.Location, cols.loc)
