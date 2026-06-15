@@ -210,11 +210,11 @@ func (tv *treeView) renderGroupNode(n *treeNode, selected bool, width int) strin
 	}
 	line := label + strings.Repeat(" ", padding) + countStr
 
+	pad := width - lipgloss.Width(line)
+	if pad > 0 {
+		line += strings.Repeat(" ", pad)
+	}
 	if selected {
-		pad := width - lipgloss.Width(line)
-		if pad > 0 {
-			line += strings.Repeat(" ", pad)
-		}
 		return bodySelectedStyle.Render(line)
 	}
 	return bodyGroupStyle.Render(line)
@@ -258,11 +258,11 @@ func (tv *treeView) renderLeafNode(n *treeNode, selected bool, width int) string
 		cols.added, added,
 		cols.used, lastUsed)
 
+	pad := width - lipgloss.Width(line)
+	if pad > 0 {
+		line += strings.Repeat(" ", pad)
+	}
 	if selected {
-		pad := width - lipgloss.Width(line)
-		if pad > 0 {
-			line += strings.Repeat(" ", pad)
-		}
 		return bodySelectedStyle.Render(line)
 	}
 	return bodyCellStyle.Render(line)
