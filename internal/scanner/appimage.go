@@ -2,7 +2,6 @@ package scanner
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -94,14 +93,5 @@ func splitAppImageName(filename string) (name, version string) {
 	}
 	return stem, ""
 }
-
-func (s AppImageScanner) Uninstall(_, location string) error {
-	return s.UninstallCmd("", location).Run()
-}
-func (s AppImageScanner) Install(_, _ string) error { return nil }
-func (s AppImageScanner) UninstallCmd(name, location string) *exec.Cmd {
-	return exec.Command("rm", "-f", filepath.Join(location, name))
-}
-func (s AppImageScanner) InstallCmd(_, _ string) *exec.Cmd { return exec.Command("true") }
 
 var _ Scanner = AppImageScanner{}

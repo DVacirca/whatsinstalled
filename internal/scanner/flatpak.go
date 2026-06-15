@@ -53,17 +53,4 @@ func (s FlatpakScanner) Scan() ([]store.Package, error) {
 	return pkgs, nil
 }
 
-func (s FlatpakScanner) Uninstall(name, _ string) error {
-	return s.UninstallCmd(name, "").Run()
-}
-func (s FlatpakScanner) Install(name, _ string) error {
-	return s.InstallCmd(name, "").Run()
-}
-func (s FlatpakScanner) UninstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("flatpak", "uninstall", "-y", name)
-}
-func (s FlatpakScanner) InstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("flatpak", "install", "-y", name)
-}
-
 var _ Scanner = FlatpakScanner{}

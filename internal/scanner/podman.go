@@ -3,7 +3,6 @@ package scanner
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -66,28 +65,6 @@ func (s PodmanScanner) Scan() ([]store.Package, error) {
 	}
 
 	return pkgs, nil
-}
-
-func (s PodmanScanner) Uninstall(name, location string) error {
-	return s.UninstallCmd(name, location).Run()
-}
-
-func (s PodmanScanner) Install(name, location string) error {
-	return s.InstallCmd(name, location).Run()
-}
-
-func (s PodmanScanner) UninstallCmd(name, location string) *exec.Cmd {
-	cmd := exec.Command("podman", "rmi", name)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
-}
-
-func (s PodmanScanner) InstallCmd(name, location string) *exec.Cmd {
-	cmd := exec.Command("podman", "pull", name)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
 }
 
 var _ Scanner = PodmanScanner{}

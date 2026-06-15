@@ -2,7 +2,6 @@ package scanner
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -75,33 +74,6 @@ func (s GoScanner) Scan() ([]store.Package, error) {
 	})
 
 	return pkgs, nil
-}
-
-func (s GoScanner) Uninstall(name, location string) error {
-	return s.UninstallCmd(name, location).Run()
-}
-
-func (s GoScanner) Install(name, location string) error {
-	return s.InstallCmd(name, location).Run()
-}
-
-func (s GoScanner) UninstallCmd(name, location string) *exec.Cmd {
-	// go clean -modcache removes everything; per-module removal isn't supported.
-	// We can at least remove the module directory from the cache.
-	modCache := filepath.Join(pkg.HomeDir(), "go", "pkg", "mod")
-	modDir := filepath.Join(modCache, filepath.FromSlash(name))
-	cmd := exec.Command("rm", "-rf", modDir)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
-}
-
-func (s GoScanner) InstallCmd(name, location string) *exec.Cmd {
-	// go get installs into the current module or module cache.
-	cmd := exec.Command("go", "get", name)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
 }
 
 var _ Scanner = GoScanner{}

@@ -58,17 +58,4 @@ func parseGemList(out, location string) []store.Package {
 	return pkgs
 }
 
-func (s GemScanner) Uninstall(name, _ string) error {
-	return s.UninstallCmd(name, "").Run()
-}
-func (s GemScanner) Install(name, _ string) error {
-	return s.InstallCmd(name, "").Run()
-}
-func (s GemScanner) UninstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("gem", "uninstall", name)
-}
-func (s GemScanner) InstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("gem", "install", name)
-}
-
 var _ Scanner = GemScanner{}

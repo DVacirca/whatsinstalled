@@ -2,7 +2,6 @@ package scanner
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -60,19 +59,6 @@ func (s CargoScanner) Scan() ([]store.Package, error) {
 		})
 	}
 	return pkgs, nil
-}
-
-func (s CargoScanner) Uninstall(name, _ string) error {
-	return s.UninstallCmd(name, "").Run()
-}
-func (s CargoScanner) Install(name, _ string) error {
-	return s.InstallCmd(name, "").Run()
-}
-func (s CargoScanner) UninstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("cargo", "uninstall", name)
-}
-func (s CargoScanner) InstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("cargo", "install", name)
 }
 
 var _ Scanner = CargoScanner{}

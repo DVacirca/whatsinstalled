@@ -113,34 +113,4 @@ func (s PixiScanner) scanEnv(envPath, envName string) ([]store.Package, error) {
 	return pkgs, nil
 }
 
-func (s PixiScanner) Uninstall(name, location string) error {
-	return s.UninstallCmd(name, location).Run()
-}
-
-func (s PixiScanner) Install(name, location string) error {
-	return s.InstallCmd(name, location).Run()
-}
-
-func (s PixiScanner) UninstallCmd(name, location string) *exec.Cmd {
-	manifest := filepath.Join(location, "pixi.toml")
-	if _, err := os.Stat(manifest); err != nil {
-		manifest = filepath.Join(pkg.HomeDir(), ".pixi", "manifests", "pixi-global.toml")
-	}
-	cmd := exec.Command("pixi", "remove", "--manifest-path", manifest, name)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
-}
-
-func (s PixiScanner) InstallCmd(name, location string) *exec.Cmd {
-	manifest := filepath.Join(location, "pixi.toml")
-	if _, err := os.Stat(manifest); err != nil {
-		manifest = filepath.Join(pkg.HomeDir(), ".pixi", "manifests", "pixi-global.toml")
-	}
-	cmd := exec.Command("pixi", "add", "--manifest-path", manifest, name)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
-}
-
 var _ Scanner = PixiScanner{}

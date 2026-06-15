@@ -77,7 +77,7 @@ flowchart LR
 | 4 | Registry requests | unescaped package name in URL; unbounded response body | request manipulation, memory DoS | **Low–Medium** |
 | 5 | Model supply chain | unpinned model download / writable model cache | loading a tampered model | **Low–Medium** |
 | 6 | Local files & DB | `--db`/`WHATSINSTALLED_DB` arbitrary path; file perms; TOCTOU | data tampering / disclosure | **Low** |
-| 7 | Dead privileged/shell exec | unwired `sh -c` and `sudo` install/uninstall code | latent injection if re-wired | **Low (latent)** |
+| 7 | Dead privileged/shell exec | unwired `sh -c` and `sudo` install/uninstall code | latent injection if re-wired | **Removed** |
 
 ---
 
@@ -205,20 +205,19 @@ still corrupt results or exploit loader bugs.
 - Create the DB `0600`; validate/normalize the `--db` path.
 - Open-then-`fstat` instead of stat-then-exec.
 
-## 7. Dead privileged / shell-exec code — Low (latent)
+## 7. Dead privileged / shell-exec code — Removed
 
-The per-source `Install` / `Uninstall` methods are **not wired to any live
-caller** (the TUI is read-only), but they still exist and contain risky patterns:
+The per-source `Install` / `Uninstall` / `InstallCmd` / `UninstallCmd` methods
+were dead (the TUI is read-only — they had no live caller) yet still carried
+risky patterns: a `sh -c` with string interpolation in `bin.go`, `sudo snap
+install/remove` in `snap.go`, and `rm <location>/<name>`.
 
-- `internal/scanner/bin.go:267` — `exec.Command("sh", "-c", fmt.Sprintf("echo … %s …", location))` — a `sh -c` with string interpolation.
-- `internal/scanner/snap.go:78,85` — `sudo snap install/remove …`.
-- `internal/scanner/bin.go:260` — `rm <location>/<name>`.
-
-None are reachable today, but dead privileged/shell code is a foot-gun: a future
-change that wires them up inherits an injection/privilege surface.
-
-**Mitigation:** delete the unused `Install`/`Uninstall` methods, or move them
-behind a clearly-guarded, argument-safe path if the feature returns.
+**Resolved.** All four methods were deleted from every scanner and from the
+`Scanner` interface (`internal/scanner/scanner.go` now declares only `Name`,
+`Scan`, `IsAvailable`, `Probe`), along with the helpers that became orphaned
+(`resolveEnvPath`, `dirSize`) — ~470 lines removed. The package no longer
+contains any `sh -c` or `sudo` invocation, so there is no install/uninstall
+execution surface to inherit if such a feature is ever re-introduced.
 
 ---
 
@@ -232,7 +231,8 @@ behind a clearly-guarded, argument-safe path if the feature returns.
    running unprivileged.
 4. **Escape registry URLs and bound response bodies** (§4).
 5. **Pin and verify the model** and lock down its cache directory (§5).
-6. **Delete the dead install/uninstall exec code** (§7); tighten DB perms (§6).
+6. **Tighten DB permissions** (§6). *(The dead install/uninstall exec code in §7
+   has been removed.)*
 
 ## What is already solid
 

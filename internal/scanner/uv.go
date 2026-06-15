@@ -66,17 +66,4 @@ func parseUvToolList(out string) []store.Package {
 	return pkgs
 }
 
-func (s UvScanner) Uninstall(name, _ string) error {
-	return s.UninstallCmd(name, "").Run()
-}
-func (s UvScanner) Install(name, _ string) error {
-	return s.InstallCmd(name, "").Run()
-}
-func (s UvScanner) UninstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("uv", "tool", "uninstall", name)
-}
-func (s UvScanner) InstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("uv", "tool", "install", name)
-}
-
 var _ Scanner = UvScanner{}

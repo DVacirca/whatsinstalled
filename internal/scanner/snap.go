@@ -2,7 +2,6 @@ package scanner
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -64,28 +63,6 @@ func (s SnapScanner) Scan() ([]store.Package, error) {
 		pkgs = append(pkgs, p)
 	}
 	return pkgs, nil
-}
-
-func (s SnapScanner) Uninstall(name, _ string) error {
-	return s.UninstallCmd(name, "").Run()
-}
-
-func (s SnapScanner) Install(name, _ string) error {
-	return s.InstallCmd(name, "").Run()
-}
-
-func (s SnapScanner) UninstallCmd(name, _ string) *exec.Cmd {
-	cmd := exec.Command("sudo", "snap", "remove", name)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
-}
-
-func (s SnapScanner) InstallCmd(name, _ string) *exec.Cmd {
-	cmd := exec.Command("sudo", "snap", "install", name)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
 }
 
 var _ Scanner = SnapScanner{}

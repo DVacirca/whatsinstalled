@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -246,28 +245,6 @@ func (s BinScanner) discoverDirs() []string {
 	}
 
 	return dirs
-}
-
-func (s BinScanner) Uninstall(name, location string) error {
-	return os.Remove(filepath.Join(location, name))
-}
-
-func (s BinScanner) Install(name, location string) error {
-	return fmt.Errorf("installing manual binaries is not supported; use curl or wget to download to %s", location)
-}
-
-func (s BinScanner) UninstallCmd(name, location string) *exec.Cmd {
-	cmd := exec.Command("rm", filepath.Join(location, name))
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
-}
-
-func (s BinScanner) InstallCmd(name, location string) *exec.Cmd {
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("echo 'Cannot install manual binaries automatically. Download to %s manually.'", location))
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
 }
 
 var _ Scanner = BinScanner{}

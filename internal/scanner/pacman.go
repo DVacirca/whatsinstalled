@@ -53,17 +53,4 @@ func (s PacmanScanner) Scan() ([]store.Package, error) {
 	return pkgs, nil
 }
 
-func (s PacmanScanner) Uninstall(name, _ string) error {
-	return s.UninstallCmd(name, "").Run()
-}
-func (s PacmanScanner) Install(name, _ string) error {
-	return s.InstallCmd(name, "").Run()
-}
-func (s PacmanScanner) UninstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("sudo", "pacman", "-R", name)
-}
-func (s PacmanScanner) InstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("sudo", "pacman", "-S", name)
-}
-
 var _ Scanner = PacmanScanner{}

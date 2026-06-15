@@ -53,17 +53,4 @@ func (s NixScanner) Scan() ([]store.Package, error) {
 	return pkgs, nil
 }
 
-func (s NixScanner) Uninstall(name, _ string) error {
-	return s.UninstallCmd(name, "").Run()
-}
-func (s NixScanner) Install(name, _ string) error {
-	return s.InstallCmd(name, "").Run()
-}
-func (s NixScanner) UninstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("nix-env", "-e", name)
-}
-func (s NixScanner) InstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("nix-env", "-iA", name)
-}
-
 var _ Scanner = NixScanner{}

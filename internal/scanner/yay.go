@@ -53,17 +53,4 @@ func (s YayScanner) Scan() ([]store.Package, error) {
 	return pkgs, nil
 }
 
-func (s YayScanner) Uninstall(name, _ string) error {
-	return s.UninstallCmd(name, "").Run()
-}
-func (s YayScanner) Install(name, _ string) error {
-	return s.InstallCmd(name, "").Run()
-}
-func (s YayScanner) UninstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("yay", "-R", name)
-}
-func (s YayScanner) InstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("yay", "-S", name)
-}
-
 var _ Scanner = YayScanner{}

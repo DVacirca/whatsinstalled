@@ -59,17 +59,4 @@ func parseYarnGlobalList(out string) []store.Package {
 	return pkgs
 }
 
-func (s YarnScanner) Uninstall(name, _ string) error {
-	return s.UninstallCmd(name, "").Run()
-}
-func (s YarnScanner) Install(name, _ string) error {
-	return s.InstallCmd(name, "").Run()
-}
-func (s YarnScanner) UninstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("yarn", "global", "remove", name)
-}
-func (s YarnScanner) InstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("yarn", "global", "add", name)
-}
-
 var _ Scanner = YarnScanner{}

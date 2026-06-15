@@ -69,17 +69,4 @@ func (s PipxScanner) Scan() ([]store.Package, error) {
 	return pkgs, nil
 }
 
-func (s PipxScanner) Uninstall(name, _ string) error {
-	return s.UninstallCmd(name, "").Run()
-}
-func (s PipxScanner) Install(name, _ string) error {
-	return s.InstallCmd(name, "").Run()
-}
-func (s PipxScanner) UninstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("pipx", "uninstall", name)
-}
-func (s PipxScanner) InstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("pipx", "install", name)
-}
-
 var _ Scanner = PipxScanner{}

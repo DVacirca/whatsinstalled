@@ -3,7 +3,6 @@ package scanner
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -69,28 +68,6 @@ func (s DockerScanner) Scan() ([]store.Package, error) {
 	}
 
 	return pkgs, nil
-}
-
-func (s DockerScanner) Uninstall(name, location string) error {
-	return s.UninstallCmd(name, location).Run()
-}
-
-func (s DockerScanner) Install(name, location string) error {
-	return s.InstallCmd(name, location).Run()
-}
-
-func (s DockerScanner) UninstallCmd(name, location string) *exec.Cmd {
-	cmd := exec.Command("docker", "rmi", name)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
-}
-
-func (s DockerScanner) InstallCmd(name, location string) *exec.Cmd {
-	cmd := exec.Command("docker", "pull", name)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
 }
 
 var _ Scanner = DockerScanner{}

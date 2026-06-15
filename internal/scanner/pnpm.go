@@ -68,17 +68,4 @@ func parsePnpmList(out []byte, location string) []store.Package {
 	return pkgs
 }
 
-func (s PnpmScanner) Uninstall(name, _ string) error {
-	return s.UninstallCmd(name, "").Run()
-}
-func (s PnpmScanner) Install(name, _ string) error {
-	return s.InstallCmd(name, "").Run()
-}
-func (s PnpmScanner) UninstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("pnpm", "remove", "-g", name)
-}
-func (s PnpmScanner) InstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("pnpm", "add", "-g", name)
-}
-
 var _ Scanner = PnpmScanner{}

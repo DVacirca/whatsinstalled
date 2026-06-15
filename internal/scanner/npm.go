@@ -146,42 +146,6 @@ func (s NpmScanner) scanLocation(location, dir string, global bool) ([]store.Pac
 	return pkgs, nil
 }
 
-func (s NpmScanner) Uninstall(name, location string) error {
-	return s.UninstallCmd(name, location).Run()
-}
-
-func (s NpmScanner) Install(name, location string) error {
-	return s.InstallCmd(name, location).Run()
-}
-
-func (s NpmScanner) UninstallCmd(name, location string) *exec.Cmd {
-	args := []string{"uninstall", name}
-	if location == "system" || location == "global" {
-		args = append(args, "-g")
-	}
-	cmd := exec.Command("npm", args...)
-	if location != "system" && location != "global" {
-		cmd.Dir = location
-	}
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
-}
-
-func (s NpmScanner) InstallCmd(name, location string) *exec.Cmd {
-	args := []string{"install", name}
-	if location == "system" || location == "global" {
-		args = append(args, "-g")
-	}
-	cmd := exec.Command("npm", args...)
-	if location != "system" && location != "global" {
-		cmd.Dir = location
-	}
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
-}
-
 // readPackageJSONDesc reads the "description" field from a package's package.json.
 func (s NpmScanner) readPackageJSONDesc(pkgDir string) string {
 	path := filepath.Join(pkgDir, "package.json")

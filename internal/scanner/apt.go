@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -97,28 +96,6 @@ func (s AptScanner) scanAll() ([]store.Package, error) {
 		pkgs = append(pkgs, p)
 	}
 	return pkgs, scanner.Err()
-}
-
-func (s AptScanner) Uninstall(name, _ string) error {
-	return s.UninstallCmd(name, "").Run()
-}
-
-func (s AptScanner) Install(name, _ string) error {
-	return s.InstallCmd(name, "").Run()
-}
-
-func (s AptScanner) UninstallCmd(name, _ string) *exec.Cmd {
-	cmd := exec.Command("sudo", "apt-get", "remove", "-y", name)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
-}
-
-func (s AptScanner) InstallCmd(name, _ string) *exec.Cmd {
-	cmd := exec.Command("sudo", "apt-get", "install", "-y", name)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
 }
 
 var _ Scanner = AptScanner{}

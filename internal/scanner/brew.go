@@ -48,17 +48,4 @@ func (s BrewScanner) Scan() ([]store.Package, error) {
 	return pkgs, nil
 }
 
-func (s BrewScanner) Uninstall(name, _ string) error {
-	return s.UninstallCmd(name, "").Run()
-}
-func (s BrewScanner) Install(name, _ string) error {
-	return s.InstallCmd(name, "").Run()
-}
-func (s BrewScanner) UninstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("brew", "uninstall", name)
-}
-func (s BrewScanner) InstallCmd(name, _ string) *exec.Cmd {
-	return exec.Command("brew", "install", name)
-}
-
 var _ Scanner = BrewScanner{}
