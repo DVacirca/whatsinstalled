@@ -3,6 +3,7 @@ package scanner
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -51,11 +52,12 @@ func (s PodmanScanner) Scan() ([]store.Package, error) {
 		if img.Tag != "latest" && img.Tag != "" {
 			name += ":" + img.Tag
 		}
+		location := podmanLocation()
 		p := store.Package{
 			Name:      name,
 			Version:   img.Tag,
 			Source:    "podman",
-			Location:  "local",
+			Location:  location,
 			UpdatedAt: time.Now(),
 			User:      pkg.CurrentUser(),
 			SizeBytes: parseDockerSize(img.Size),
@@ -65,6 +67,19 @@ func (s PodmanScanner) Scan() ([]store.Package, error) {
 	}
 
 	return pkgs, nil
+}
+
+func podmanLocation() string {
+	candidates := []string{
+		pkg.HomeDir() + "/.local/share/containers/storage", // rootless
+		"/var/lib/containers/storage",                      // rootful
+	}
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return "local"
 }
 
 var _ Scanner = PodmanScanner{}

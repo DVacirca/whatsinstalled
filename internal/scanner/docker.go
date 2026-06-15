@@ -3,6 +3,7 @@ package scanner
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -51,11 +52,12 @@ func (s DockerScanner) Scan() ([]store.Package, error) {
 		if img.Tag != "latest" && img.Tag != "" {
 			name += ":" + img.Tag
 		}
+		location := dockerLocation()
 		p := store.Package{
 			Name:      name,
 			Version:   img.Tag,
 			Source:    "docker",
-			Location:  "local",
+			Location:  location,
 			UpdatedAt: time.Now(),
 			User:      pkg.FileOwner("/var/lib/docker"),
 			SizeBytes: parseDockerSize(img.Size),
@@ -68,6 +70,20 @@ func (s DockerScanner) Scan() ([]store.Package, error) {
 	}
 
 	return pkgs, nil
+}
+
+func dockerLocation() string {
+	candidates := []string{
+		pkg.HomeDir() + "/.local/share/docker", // rootless
+		"/var/lib/docker",                      // rootful (default)
+		"/var/lib/docker-engine",               // some distros
+	}
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return "local"
 }
 
 var _ Scanner = DockerScanner{}
