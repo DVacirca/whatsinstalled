@@ -70,12 +70,8 @@ func (m *model) View() string {
 	}
 	counts := shellCountStyle.Render(strings.Join(countParts, "  │  "))
 	titleContent := lipgloss.JoinHorizontal(lipgloss.Left, title, "  ", counts)
-	// Right corner: version, with the background-refresh indicator to its left.
+	// Right corner: version
 	right := lipgloss.NewStyle().Foreground(fgDim).Render(version.Version)
-	if m.bgUpdating {
-		indicator := lipgloss.NewStyle().Foreground(accent).Bold(true).Render(spinnerGlyph(m.spinnerFrame) + " updating…")
-		right = lipgloss.JoinHorizontal(lipgloss.Left, indicator, "  ", right)
-	}
 	// Pad to full width so the bg is uniform and the version sits flush right.
 	pad := sepWidth - lipgloss.Width(titleContent) - lipgloss.Width(right)
 	if pad > 0 {

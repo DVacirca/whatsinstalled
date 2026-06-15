@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"whatsinstalled/internal/pkg"
 	"whatsinstalled/internal/store"
 )
 
@@ -45,9 +46,9 @@ func (s NixScanner) Scan() ([]store.Package, error) {
 			Name:      fields[0],
 			Version:   ver,
 			Source:    "nix",
-			Location:  "system",
+			Location:  "/nix",
 			UpdatedAt: time.Now(),
-			User:      "system",
+			User:      pkg.FileOwner("/nix"),
 		})
 	}
 	return pkgs, nil

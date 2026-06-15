@@ -45,7 +45,7 @@ func (s SnapScanner) Scan() ([]store.Package, error) {
 			Version:   fields[1],
 			Source:    "snap",
 			Location:  filepath.Join("/snap", fields[0]),
-			User:      "system",
+			User:      pkg.FileOwner(filepath.Join("/snap", fields[0])),
 			UpdatedAt: time.Now(),
 			LastUsed:  pkg.GetLastUsed(filepath.Join("/snap", fields[0])),
 		}

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"whatsinstalled/internal/pkg"
 	"whatsinstalled/internal/store"
 )
 
@@ -26,6 +27,13 @@ func (s BrewScanner) Scan() ([]store.Package, error) {
 		return nil, fmt.Errorf("brew list: %w", err)
 	}
 
+	// Determine brew prefix for location and owner
+	brewPrefix := "/home/linuxbrew/.linuxbrew"
+	if prefixOut, err := exec.Command("brew", "--prefix").Output(); err == nil {
+		brewPrefix = strings.TrimSpace(string(prefixOut))
+	}
+	owner := pkg.FileOwner(brewPrefix)
+
 	var pkgs []store.Package
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 	for _, line := range lines {
@@ -39,9 +47,9 @@ func (s BrewScanner) Scan() ([]store.Package, error) {
 				Name:      name,
 				Version:   "",
 				Source:    "brew",
-				Location:  "system",
+				Location:  brewPrefix,
 				UpdatedAt: time.Now(),
-				User:      "user",
+				User:      owner,
 			})
 		}
 	}

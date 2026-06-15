@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"whatsinstalled/internal/pkg"
 	"whatsinstalled/internal/store"
 )
 
@@ -45,9 +46,9 @@ func (s YayScanner) Scan() ([]store.Package, error) {
 			Name:      fields[0],
 			Version:   ver,
 			Source:    "yay",
-			Location:  "system",
+			Location:  "/var/lib/pacman",
 			UpdatedAt: time.Now(),
-			User:      "user",
+			User:      pkg.FileOwner("/var/lib/pacman"),
 		})
 	}
 	return pkgs, nil

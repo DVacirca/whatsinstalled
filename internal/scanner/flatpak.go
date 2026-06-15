@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"whatsinstalled/internal/pkg"
 	"whatsinstalled/internal/store"
 )
 
@@ -45,9 +46,9 @@ func (s FlatpakScanner) Scan() ([]store.Package, error) {
 			Name:      fields[0],
 			Version:   ver,
 			Source:    "flatpak",
-			Location:  "system",
+			Location:  "/var/lib/flatpak",
 			UpdatedAt: time.Now(),
-			User:      "system",
+			User:      pkg.FileOwner("/var/lib/flatpak"),
 		})
 	}
 	return pkgs, nil

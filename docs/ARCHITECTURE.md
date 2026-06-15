@@ -157,7 +157,7 @@ the dashboard renders immediately and the pipeline refreshes in the background.
   - **pacman/yay**: `pacman -Qi`
   - **pip/pipx/uv**: `pip show` → PyPI API
   - **npm/pnpm/yarn**: `npm info` → npm registry
-  - **cargo**: crates.io · **gem**: rubygems.org
+  - **gem**: `gem list --details` (bulk local) → rubygems.org
   - others (docker, podman, go, appimage, nix, flatpak): no description
 - Results are cached in `enrichment_cache` (30-day TTL) and written via
   `UpdateManyDescriptions()`.
@@ -211,6 +211,68 @@ The ranking formula is configurable through `search.Options`:
 
 ---
 
+## Dependency Detection
+
+Sub-dependencies (packages installed as a side-effect of another package, not
+directly by the user) are marked in the `auto_installed` column and shown in the
+TUI with a `↳ ` indent prefix. Coverage spans the three largest sources:
+
+| Source | Detection method | Coverage |
+|--------|-----------------|----------|
+| **apt** | `apt-mark showmanual` cross-reference | All packages |
+| **pip** | `pip show` `Required-by:` field (bulk, one call per venv) | System + local venvs |
+| **conda** | `conda-meta/*.json` `requested_spec` field | All environments |
+
+Press `D` to toggle dependency visibility (default: shown). The removal
+recommender (`docs/upcoming-features/removal-recommender.md`) hard-excludes
+sub-dependencies from removal candidates — the user cannot remove what the
+maintainer controls.
+
+---
+
+## Per-Package Sizes
+
+Sizes are populated from the package's own filesystem path when one can be
+resolved at scan time. Coverage:
+
+| Source | Size source | Coverage |
+|--------|------------|----------|
+| **apt** | `dpkg` `Installed-Size` field | 100% |
+| **bin** / **cargo** / **appimage** | File size | 100% |
+| **docker** / **podman** | JSON `Size` field | 100% |
+| **pipx** / **uv** | Recursive `du` of venv dir | 100% |
+| **pip** | `PathSize` on site-packages dir (via `pip show Location:`) | ~54% |
+| **conda** | `PathSize` on `pkgs/<name>-<version>-<build>` | ~32% |
+| **npm** | `PathSize` on `node_modules/<name>` | ~60% |
+
+The gap in pip/conda/npm is single-file modules and namespace packages where the
+per-package directory doesn't follow the standard naming convention. Sources
+without a per-package path (snap, flatpak, pacman, yay, nix, brew, go, gem,
+pnpm, yarn, pixi) leave size empty.
+
+---
+
+## Location Tracking
+
+All scanners now report real filesystem paths in the `location` column, replacing
+hardcoded `"system"` / `"local"` labels:
+
+| Source | Location value |
+|--------|---------------|
+| **apt** | `/var/lib/dpkg` |
+| **snap** | `/snap/<name>` |
+| **pip** | `pip show` `Location:` field (site-packages path) |
+| **npm** global | `npm root -g` output |
+| **npm** local | Project directory path |
+| **conda** | Full environment path (`/home/user/miniconda3/envs/<name>`) |
+| **docker** | Stat-detected data-root (`/var/lib/docker`, `~/.local/share/docker`, etc.) |
+| **podman** | Stat-detected storage-root (`/var/lib/containers/storage`, etc.) |
+
+The tree view groups packages by location, so these paths produce meaningful
+group labels in the TUI instead of generic placeholders.
+
+---
+
 ## Evaluation Harness
 
 `whatsinstalled eval` runs the **same** `search.Rank()` used by the TUI, so the
@@ -243,19 +305,19 @@ whatsinstalled eval --baseline results.json   # diff against a baseline
 ```text
 ┌─ whatsinstalled ── apt:90 │ snap:3 │ npm:14 ─────────── v1.0.0-beta ─┐
 │══════════════════════════════════════════════════════════════════│
-│  Name      Version Src  Location   User   Size  Added  Used        │
-│  ▾ system                    [45]                                   │
-│    nginx   1.24.0  apt  system     system 4.2M  12d    3d          │
-│    core20  202604  snap system     system  -    30d    -           │
-│  ▸ base                      [23]                                   │
+│  Name         Version Src  Location            User  Size  Added  Used │
+│  ▾ /var/lib/dpkg               [45]                                   │
+│      nginx     1.24.0  apt  /var/lib/dpkg       system 4.2M  12d   3d │
+│      ↳ libssl  3.0.2   apt  /var/lib/dpkg       system 2.1M  12d   -  │
+│  ▸ /snap/core20                [3]                                    │
 │══════════════════════════════════════════════════════════════════│
 │  [All] [Apt] [Snap] [Npm] [Pip] [Conda] [Bin]        /filter       │
 │══════════════════════════════════════════════════════════════════│
-│  ▾ Description                      │ ▾ Keys                         │
-│  nginx — web server                 │ :  Command palette             │
-│                                     │ ?  Ask whatsinstalled          │
+│  ▾ Description                      │ ▾ Keys                        │
+│  nginx — web server                 │ :  Command palette            │
+│                                     │ ?  Ask whatsinstalled         │
 │══════════════════════════════════════════════════════════════════│
-│ nginx (apt)  │  whatsinstalled — tokyo-night                       │
+│ nginx (apt)  │  whatsinstalled — tokyo-night                      │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -321,6 +383,17 @@ The planned fix is a two-track body of work already specced under `docs/upcoming
   new `internal/metadata` package with a `Generator` interface (stub / teacher /
   local backends) that runs **only at init**, writes the metadata, and feeds the
   `use_cases` text into the existing MiniLM embedding path.
+- **CLI query command** (`upcoming-features/agent-cli-query.md`) — `whatsinstalled
+  ask "<query>"` returns JSON results for programmatic/agent use.
+- **Package removal recommender** (`upcoming-features/removal-recommender.md`) —
+  ranks packages by removal candidacy using staleness, size, duplicate detection
+  (cosine similarity), and optional LLM impact analysis; sub-dependencies are
+  hard-excluded.
+- **Langfuse observability** (`upcoming-features/langfuse-observability.md`) —
+  build-tag-gated OTLP tracing via OpenTelemetry for init and search pipelines.
+- **Custom path scanner** (`upcoming-features/custom-path-scanner.md`) —
+  user-configurable `~/.config/whatsinstalled/custom.json` maps arbitrary
+  directories to source labels.
 
 Crucially this keeps the "no generative call at query time" invariant: richer
 embeddings widen recall ("web tools" → Django, node, axios) while search stays a
@@ -333,7 +406,7 @@ pure vector ranking that cannot hang.
 | **Ranking fusion** | `Score = cosine + KeywordWeight × keyword` with hand-set weights; small golden set (`queries.json`) limits tuning signal. | Treat `search.Options` as tunable, sweep variants with `eval` against a baseline, grow the curated set, and lean less on the keyword boost once metadata is richer. |
 | **Enrichment coverage** | Several sources (docker, podman, go, appimage, nix, flatpak) yield no description, so their vectors are just name + source. | Source-specific enrichers (image labels/manifests, Go module docs, flatpak AppStream, nix attrs) feeding the same 30-day cache; the metadata model covers the long tail. |
 | **Search scaling** | Every query loads *all* vectors via `ListWithEmbeddings()` and scores in memory; embeddings are stored as JSON text. Fine for thousands, not for very large inventories. | An on-disk / quantized vector index if inventories grow, behind the unchanged pure `search.Rank` contract so the TUI and eval stay in lock-step. |
-| **Usage signal** | `Added` / `Used` derive from file mtime/atime, which `noatime` mounts and routine tooling make noisy; columns are often blank. | More robust last-used tracking so "what haven't I used in months?" becomes trustworthy. |
+| **Usage signal** | `Added` / `Used` derive from file mtime/atime, which `noatime` mounts and routine tooling make noisy; `Added` benefits from the same per-package path improvements as sizes. | More robust last-used tracking so "what haven't I used in months?" becomes trustworthy. |
 | **Temporal view** | The inventory is a point-in-time snapshot with no history. | Optional snapshots and diffs ("what changed since last week") and export — while deliberately staying read-only (no install/uninstall). |
 | **Portability** | Tuned for Debian/Ubuntu and WSL; macOS and other distros are partially covered. | Broaden scanner coverage and add cross-distro CI. |
 | **Model bootstrap** | First run downloads a ~177 MB model; absent it, search silently degrades to substring matching. | Offer a smaller/quantized model option and make the degraded mode more visible in the UI. |

@@ -75,7 +75,7 @@ func (s AptScanner) scanAll() ([]store.Package, error) {
 			Version:  fields[1],
 			Source:   "apt",
 			Location: "/var/lib/dpkg",
-			User:     "system",
+			User:     pkg.FileOwner("/var/lib/dpkg"),
 		}
 		// Auto-installed = present in dpkg but not explicitly chosen by the
 		// user. Only trust this when apt-mark gave us a manual set.
