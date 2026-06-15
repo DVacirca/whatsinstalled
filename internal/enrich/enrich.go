@@ -110,90 +110,58 @@ func (e *Enricher) enrichSource(
 		names[i] = p.Name
 	}
 
+	descMap := e.descMapForSource(source, names)
+
+	for _, p := range pkgs {
+		desc := descMap[p.Name]
+		key := fmt.Sprintf("%s:%s:%s", p.Name, p.Source, p.Location)
+		mu.Lock()
+		results[key] = desc
+		mu.Unlock()
+		onProgress(source, p.Name, desc)
+	}
+}
+
+// descMapForSource resolves descriptions for a group of package names from a
+// single source, trying local commands first and falling back to remote
+// registries where one exists. Sources that map to the same registry share a
+// resolver (pipx/uv → PyPI, pnpm/yarn → npm, yay → pacman).
+func (e *Enricher) descMapForSource(source string, names []string) map[string]string {
 	switch source {
 	case "bin":
-		descMap := e.local.EnrichBin(names)
-		for _, p := range pkgs {
-			desc := descMap[p.Name]
-			key := fmt.Sprintf("%s:%s:%s", p.Name, p.Source, p.Location)
-			mu.Lock()
-			results[key] = desc
-			mu.Unlock()
-			onProgress(source, p.Name, desc)
-		}
-	case "pip":
+		return e.local.EnrichBin(names)
+	case "apt":
+		return e.local.EnrichApt(names)
+	case "snap":
+		return e.local.EnrichSnap(names)
+	case "conda":
+		return e.local.EnrichConda(names)
+	case "brew":
+		return e.local.EnrichBrew(names)
+	case "pacman", "yay":
+		return e.local.EnrichPacman(names)
+	case "pip", "pipx", "uv":
 		descMap := e.local.EnrichPip(names)
-		remaining := e.remainingNames(names, descMap)
-		if len(remaining) > 0 {
-			onProgress(source, fmt.Sprintf("%d remaining", len(remaining)), "")
-			remoteMap := e.remote.EnrichPip(remaining)
-			for k, v := range remoteMap {
+		if remaining := e.remainingNames(names, descMap); len(remaining) > 0 {
+			for k, v := range e.remote.EnrichPip(remaining) {
 				descMap[k] = v
 			}
 		}
-		for _, p := range pkgs {
-			desc := descMap[p.Name]
-			key := fmt.Sprintf("%s:%s:%s", p.Name, p.Source, p.Location)
-			mu.Lock()
-			results[key] = desc
-			mu.Unlock()
-			onProgress(source, p.Name, desc)
-		}
-	case "npm":
-		for _, p := range pkgs {
-			onProgress(source, p.Name, "")
-			desc, err := e.local.enrichSingleNpm(p.Name)
-			if err != nil {
-				continue
+		return descMap
+	case "npm", "pnpm", "yarn":
+		descMap := e.local.EnrichNpm(names)
+		if remaining := e.remainingNames(names, descMap); len(remaining) > 0 {
+			for k, v := range e.remote.EnrichNpm(remaining) {
+				descMap[k] = v
 			}
-			if desc == "" {
-				desc = e.remote.fetchNpm(p.Name)
-				if desc != "" {
-					_ = e.cache.Set(p.Name, "npm", desc)
-				}
-			}
-			key := fmt.Sprintf("%s:%s:%s", p.Name, p.Source, p.Location)
-			mu.Lock()
-			results[key] = desc
-			mu.Unlock()
-			onProgress(source, p.Name, desc)
 		}
-	case "apt":
-		descMap := e.local.EnrichApt(names)
-		for _, p := range pkgs {
-			desc := descMap[p.Name]
-			key := fmt.Sprintf("%s:%s:%s", p.Name, p.Source, p.Location)
-			mu.Lock()
-			results[key] = desc
-			mu.Unlock()
-			onProgress(source, p.Name, desc)
-		}
-	case "snap":
-		for _, p := range pkgs {
-			onProgress(source, p.Name, "")
-			desc, err := e.local.enrichSingleSnap(p.Name)
-			if err != nil {
-				continue
-			}
-			key := fmt.Sprintf("%s:%s:%s", p.Name, p.Source, p.Location)
-			mu.Lock()
-			results[key] = desc
-			mu.Unlock()
-			onProgress(source, p.Name, desc)
-		}
-	case "conda":
-		for _, p := range pkgs {
-			onProgress(source, p.Name, "")
-			desc, err := e.local.enrichSingleConda(p.Name)
-			if err != nil {
-				continue
-			}
-			key := fmt.Sprintf("%s:%s:%s", p.Name, p.Source, p.Location)
-			mu.Lock()
-			results[key] = desc
-			mu.Unlock()
-			onProgress(source, p.Name, desc)
-		}
+		return descMap
+	case "cargo":
+		return e.remote.EnrichCargo(names)
+	case "gem":
+		return e.remote.EnrichGem(names)
+	default:
+		return map[string]string{}
 	}
 }
 

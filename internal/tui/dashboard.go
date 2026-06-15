@@ -243,35 +243,24 @@ func NewModel(s *store.Store) *model {
 	return m
 }
 
-// buildTabs rebuilds tab labels from the currently loaded counts. Tabs are
-// emitted in a STABLE canonical order — the scanner registry order, then any
-// DB-only sources sorted — because `m.tabIndex` is positional. Iterating the
+// buildTabs rebuilds tab labels from the currently loaded counts. "All" is
+// always first; the remaining source tabs follow in alphabetical order. A
+// STABLE order matters because `m.tabIndex` is positional — iterating the
 // `m.counts` map directly randomized the order on every rebuild, which made the
 // tabs jump around and desynced the highlighted label from the loaded data.
 func (m *model) buildTabs() {
 	sources := []string{""}
 	labels := []string{"All"}
-	seen := map[string]bool{}
 
-	// Registry order first.
-	for _, sc := range scanner.AllScanners {
-		name := sc.Name()
-		if m.counts[name] > 0 && !seen[name] {
-			sources = append(sources, name)
-			labels = append(labels, capitalise(name))
-			seen[name] = true
-		}
-	}
-
-	// Any sources present in the DB but not in the registry, in a stable order.
-	var extra []string
+	var names []string
 	for src, cnt := range m.counts {
-		if cnt > 0 && src != "" && !seen[src] {
-			extra = append(extra, src)
+		if cnt > 0 && src != "" {
+			names = append(names, src)
 		}
 	}
-	sort.Strings(extra)
-	for _, src := range extra {
+	sort.Strings(names)
+
+	for _, src := range names {
 		sources = append(sources, src)
 		labels = append(labels, capitalise(src))
 	}

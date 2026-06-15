@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"os/exec"
 	"strings"
 	"sync"
@@ -304,6 +305,73 @@ func (le *LocalEnricher) EnrichConda(names []string) map[string]string {
 			end := strings.Index(string(out[start:]), `"`)
 			if end >= 0 {
 				results[name] = string(out[start : start+end])
+			}
+		}
+	}
+	return results
+}
+
+// EnrichBrew gets descriptions for brew formulae/casks using brew info --json.
+func (le *LocalEnricher) EnrichBrew(names []string) map[string]string {
+	results := make(map[string]string)
+	if len(names) == 0 {
+		return results
+	}
+
+	out, err := runCmd(bulkCmdTimeout, "brew", append([]string{"info", "--json=v2"}, names...)...)
+	if err != nil {
+		return results
+	}
+
+	var data struct {
+		Formulae []struct {
+			Name string `json:"name"`
+			Desc string `json:"desc"`
+		} `json:"formulae"`
+		Casks []struct {
+			Token string `json:"token"`
+			Desc  string `json:"desc"`
+		} `json:"casks"`
+	}
+	if err := json.Unmarshal(out, &data); err != nil {
+		return results
+	}
+	for _, f := range data.Formulae {
+		if f.Desc != "" {
+			results[f.Name] = f.Desc
+		}
+	}
+	for _, c := range data.Casks {
+		if c.Desc != "" {
+			results[c.Token] = c.Desc
+		}
+	}
+	return results
+}
+
+// EnrichPacman gets descriptions for pacman/yay packages using pacman -Qi.
+func (le *LocalEnricher) EnrichPacman(names []string) map[string]string {
+	results := make(map[string]string)
+	if len(names) == 0 {
+		return results
+	}
+
+	out, err := runCmd(bulkCmdTimeout, "pacman", append([]string{"-Qi"}, names...)...)
+	if err != nil {
+		return results
+	}
+
+	var currentName string
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "Name") {
+			if idx := strings.Index(line, ":"); idx >= 0 {
+				currentName = strings.TrimSpace(line[idx+1:])
+			}
+		} else if strings.HasPrefix(line, "Description") {
+			if idx := strings.Index(line, ":"); idx >= 0 && currentName != "" {
+				results[currentName] = strings.TrimSpace(line[idx+1:])
 			}
 		}
 	}

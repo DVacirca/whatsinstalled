@@ -24,20 +24,20 @@ func TestBuildTabsStableOrder(t *testing.T) {
 		}
 	}
 
-	// Order follows the scanner registry (apt, snap, npm, pip, conda, bin, …),
-	// with "All" first and absent sources (snap here) omitted.
-	want := []string{"", "apt", "npm", "pip", "conda", "bin"}
+	// "All" first, then source tabs in alphabetical order. Absent sources
+	// (snap here) are omitted.
+	want := []string{"", "apt", "bin", "conda", "npm", "pip"}
 	if !reflect.DeepEqual(want, m.availableSources) {
 		t.Fatalf("unexpected tab order: got %v want %v", m.availableSources, want)
 	}
 }
 
-// TestBuildTabsUnknownSourceStable verifies DB-only sources (not in the
-// registry) are appended deterministically rather than randomly.
+// TestBuildTabsUnknownSourceStable verifies all sources, including DB-only ones
+// not in the registry, are ordered alphabetically and deterministically.
 func TestBuildTabsUnknownSourceStable(t *testing.T) {
 	m := &model{counts: map[string]int{"apt": 1, "zeta": 1, "alpha": 1}}
 	m.buildTabs()
-	want := []string{"", "apt", "alpha", "zeta"} // registry (apt) then sorted extras
+	want := []string{"", "alpha", "apt", "zeta"} // "All" then alphabetical
 	if !reflect.DeepEqual(want, m.availableSources) {
 		t.Fatalf("got %v want %v", m.availableSources, want)
 	}
