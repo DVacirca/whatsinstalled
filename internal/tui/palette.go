@@ -18,41 +18,17 @@ type commandDef struct {
 // paletteCommands is the full, ordered list of commands shown in the palette.
 // Each command mirrors a top-level keybinding handled in Update.
 var paletteCommands = []commandDef{
-	{"Details", "Show details", "d", false, func(m *model) tea.Cmd { m.mode = "detail"; return nil }},
-	{"Filter", "Filter packages by name", "/", false, func(m *model) tea.Cmd {
-		m.filtering = true
-		m.filter = ""
-		return nil
-	}},
-	{"Search", "Semantic search with LLM (experimental)", "?", false, func(m *model) tea.Cmd {
-		m.mode = "search"
-		m.semanticQuery = ""
-		m.semanticResults = nil
-		m.searchMsg = ""
-		return nil
-	}},
-	{"Rescan", "Rescan all packages", "r", false, func(m *model) tea.Cmd {
-		m.scanning = true
-		m.bgUpdating = true
-		m.scanSource = ""
-		m.scanCount = 0
-		m.initStep = "scan"
-		return func() tea.Msg { return m.fullInitWithProgress() }
-	}},
+	{"Details", "Show details", "d", false, func(m *model) tea.Cmd { return m.enterDetailMode() }},
+	{"Filter", "Filter packages by name", "/", false, func(m *model) tea.Cmd { return m.enterFilterMode() }},
+	{"Search", "Semantic search with LLM (experimental)", "?", false, func(m *model) tea.Cmd { return m.enterSearchMode() }},
+	{"Rescan", "Rescan all packages", "r", false, func(m *model) tea.Cmd { return m.triggerRescan() }},
 	{"Deps", "Show/hide apt packages auto-installed as dependencies (apt only)", "D", false, func(m *model) tea.Cmd {
 		m.hideAuto = !m.hideAuto
 		return m.loadData
 	}},
 	{"Quit", "Quit whatsinstalled", "q", false, func(m *model) tea.Cmd { return tea.Quit }},
-	{"Theme", "Switch color theme", "t", false, func(m *model) tea.Cmd {
-		m.mode = "theme-picker"
-		m.themePickerIndex = currentThemeIndex()
-		return nil
-	}},
-	{"About", "About whatsinstalled", "a", false, func(m *model) tea.Cmd {
-		m.mode = "about"
-		return nil
-	}},
+	{"Theme", "Switch color theme", "t", false, func(m *model) tea.Cmd { return m.enterThemePicker() }},
+	{"About", "About whatsinstalled", "a", false, func(m *model) tea.Cmd { return m.enterAbout() }},
 }
 
 // filteredPaletteCommands returns the commands whose label or description match

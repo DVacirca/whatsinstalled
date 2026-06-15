@@ -214,8 +214,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			cmds = append(cmds, m.loadData)
 		case "/":
-			m.filtering = true
-			m.filter = ""
+			if c := m.enterFilterMode(); c != nil {
+				cmds = append(cmds, c)
+			}
 		case "D":
 			m.hideAuto = !m.hideAuto
 			cmds = append(cmds, m.loadData)
@@ -235,31 +236,30 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "d", "enter":
 			if m.tree.selectedPkg() != nil || (m.tree.selected() != nil && m.tree.selected().isGroup) {
-				m.mode = "detail"
+				if c := m.enterDetailMode(); c != nil {
+					cmds = append(cmds, c)
+				}
 			}
 		case "?":
-			m.mode = "search"
-			m.semanticQuery = ""
-			m.semanticResults = nil
-			m.searchMsg = ""
+			if c := m.enterSearchMode(); c != nil {
+				cmds = append(cmds, c)
+			}
 		case ":":
-			m.cmdPaletteOpen = true
-			m.cmdPaletteIndex = 0
-			m.cmdPaletteQuery = ""
+			if c := m.enterCommandPalette(); c != nil {
+				cmds = append(cmds, c)
+			}
 		case "t":
-			m.mode = "theme-picker"
-			m.themePickerIndex = currentThemeIndex()
+			if c := m.enterThemePicker(); c != nil {
+				cmds = append(cmds, c)
+			}
 		case "a":
-			m.mode = "about"
+			if c := m.enterAbout(); c != nil {
+				cmds = append(cmds, c)
+			}
 		case "r":
-			m.scanning = true
-			m.bgUpdating = true
-			m.scanSource = ""
-			m.scanCount = 0
-			m.initStep = "scan"
-			cmds = append(cmds, func() tea.Msg {
-				return m.fullInitWithProgress()
-			})
+			if c := m.triggerRescan(); c != nil {
+				cmds = append(cmds, c)
+			}
 		}
 
 	case dataLoadedMsg:

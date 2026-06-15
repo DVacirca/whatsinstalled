@@ -4,6 +4,7 @@ import (
 	"sort"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"whatsinstalled/internal/nlp"
 	"whatsinstalled/internal/store"
 )
@@ -174,4 +175,55 @@ func (m *model) currentSource() string {
 		return tabs[m.tabIndex]
 	}
 	return ""
+}
+
+// ── Mode-entry helpers ────────────────────────────────────────────────
+// Each helper encapsulates the state transition for entering a UI mode.
+// Both the key handler (update.go) and the command palette (palette.go)
+// call these so the transition stays in one place.
+
+func (m *model) enterSearchMode() tea.Cmd {
+	m.mode = "search"
+	m.semanticQuery = ""
+	m.semanticResults = nil
+	m.searchMsg = ""
+	return nil
+}
+
+func (m *model) enterFilterMode() tea.Cmd {
+	m.filtering = true
+	m.filter = ""
+	return nil
+}
+
+func (m *model) enterDetailMode() tea.Cmd {
+	m.mode = "detail"
+	return nil
+}
+
+func (m *model) enterThemePicker() tea.Cmd {
+	m.mode = "theme-picker"
+	m.themePickerIndex = currentThemeIndex()
+	return nil
+}
+
+func (m *model) enterAbout() tea.Cmd {
+	m.mode = "about"
+	return nil
+}
+
+func (m *model) enterCommandPalette() tea.Cmd {
+	m.cmdPaletteOpen = true
+	m.cmdPaletteIndex = 0
+	m.cmdPaletteQuery = ""
+	return nil
+}
+
+func (m *model) triggerRescan() tea.Cmd {
+	m.scanning = true
+	m.bgUpdating = true
+	m.scanSource = ""
+	m.scanCount = 0
+	m.initStep = "scan"
+	return func() tea.Msg { return m.fullInitWithProgress() }
 }
