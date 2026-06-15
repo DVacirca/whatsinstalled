@@ -136,6 +136,17 @@ func findTheme(name string) Theme {
 	return TokyoNight
 }
 
+// currentThemeIndex returns the index in AllThemes of the active theme, or 0 if
+// it can't be found. Used to open the theme picker on the current selection.
+func currentThemeIndex() int {
+	for i, t := range AllThemes {
+		if t.Name == currentTheme.Name {
+			return i
+		}
+	}
+	return 0
+}
+
 // themeDir returns the config directory for installr.
 func themeDir() string {
 	home, err := os.UserHomeDir()

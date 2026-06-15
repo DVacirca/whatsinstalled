@@ -58,7 +58,7 @@ var paletteCommands = []commandDef{
 	{"Quit", "Quit installr", "q", false, func(m *model) tea.Cmd { return tea.Quit }},
 	{"Theme", "Switch color theme", "t", false, func(m *model) tea.Cmd {
 		m.mode = "theme-picker"
-		m.themePickerIndex = 0
+		m.themePickerIndex = currentThemeIndex()
 		return nil
 	}},
 }
@@ -518,7 +518,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cmdPaletteQuery = ""
 		case "t":
 			m.mode = "theme-picker"
-			m.themePickerIndex = 0
+			m.themePickerIndex = currentThemeIndex()
 		case "r":
 			m.scanning = true
 			m.bgUpdating = true
@@ -898,6 +898,9 @@ func (m *model) View() string {
 			if i == m.themePickerIndex {
 				label = "▸ " + t.Name
 			}
+			if t.Name == currentTheme.Name {
+				label += " ✓"
+			}
 			style := lipgloss.NewStyle().Foreground(fg)
 			if i == m.themePickerIndex {
 				style = lipgloss.NewStyle().Foreground(orange).Bold(true)
@@ -905,7 +908,7 @@ func (m *model) View() string {
 			lines = append(lines, style.Render(label))
 		}
 		lines = append(lines, "")
-		lines = append(lines, lipgloss.NewStyle().Foreground(fgDim).Render("  ↑↓ navigate │ Enter apply │ Esc close"))
+		lines = append(lines, lipgloss.NewStyle().Foreground(fgDim).Render("  ↑↓ navigate │ Enter apply │ Esc close │ ✓ current"))
 		modalContent := lipgloss.JoinVertical(lipgloss.Left, lines...)
 		modal := modalBorderStyle.Width(modalWidth).Render(modalContent)
 		result = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
