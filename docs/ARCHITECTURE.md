@@ -17,7 +17,7 @@ End-to-end pipeline: **Scan → Enrich → Embed → Search → Display**. SQLit
 hub every stage reads from and writes back to.
 
 ```mermaid
-flowchart TD
+graph TD
     subgraph init["Initialisation pipeline - fullInitWithProgress"]
         SCAN["SCAN - 22 package managers, parallel goroutines<br/>Scan returns slice of store.Package"]
         ENRICH["ENRICHMENT - local tools + remote registries<br/>30-day SQLite cache"]
@@ -97,7 +97,7 @@ The dashboard was split out of a single 1.8k-line file into cohesive units that
 map onto Bubble Tea's `Init` / `Update` / `View` contract.
 
 ```mermaid
-flowchart LR
+graph LR
     RUN["app.go - Run, builds and starts tea.Program"]
 
     subgraph loop["Bubble Tea loop"]

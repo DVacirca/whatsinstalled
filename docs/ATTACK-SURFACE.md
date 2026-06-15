@@ -35,7 +35,7 @@ displays.
 - Registry calls use the default `http.Client` with **TLS verification on** and a 10 s timeout (`internal/enrich/remote.go`).
 
 ```mermaid
-flowchart LR
+graph LR
     subgraph untrusted["Untrusted inputs"]
         DIRS["scanned dirs and binaries<br/>home .venv bin pip, CWD, PATH"]
         META["package metadata<br/>names, versions, descriptions"]
