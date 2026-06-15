@@ -3,7 +3,7 @@ package nlp
 import (
 	"strings"
 
-	"installr/internal/store"
+	"whatsinstalled/internal/store"
 )
 
 // domainSynonyms maps broad query keywords to lists of related tool names.

@@ -3,7 +3,7 @@ package scanner
 import (
 	"os/exec"
 
-	"installr/internal/store"
+	"whatsinstalled/internal/store"
 )
 
 // commandExists reports whether a command is in PATH.

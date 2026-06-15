@@ -1,4 +1,4 @@
-module installr
+module whatsinstalled
 
 go 1.25.0
 

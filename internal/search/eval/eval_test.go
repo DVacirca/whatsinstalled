@@ -3,7 +3,7 @@ package eval
 import (
 	"testing"
 
-	"installr/internal/store"
+	"whatsinstalled/internal/store"
 )
 
 func TestReciprocalRank(t *testing.T) {

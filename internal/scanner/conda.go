@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"installr/internal/pkg"
-	"installr/internal/store"
+	"whatsinstalled/internal/pkg"
+	"whatsinstalled/internal/store"
 )
 
 // CondaScanner scans conda environments and their packages.

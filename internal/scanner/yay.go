@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"installr/internal/store"
+	"whatsinstalled/internal/store"
 )
 
 // YayScanner scans AUR packages via yay.

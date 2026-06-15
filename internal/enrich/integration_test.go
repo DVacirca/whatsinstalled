@@ -3,14 +3,14 @@ package enrich
 import (
 	"testing"
 
-	"installr/internal/store"
+	"whatsinstalled/internal/store"
 )
 
 // TestIntegrationEnrichRealPackages tests enrichment with actual system packages.
 // This test requires the real database to be present.
 func TestIntegrationEnrichRealPackages(t *testing.T) {
 	// Skip if no real database
-	db, err := store.Open("/home/dv/.installr.db")
+	db, err := store.Open("/home/dv/.whatsinstalled.db")
 	if err != nil {
 		t.Skipf("No real database available: %v", err)
 	}

@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"installr/internal/pkg"
-	"installr/internal/store"
+	"whatsinstalled/internal/pkg"
+	"whatsinstalled/internal/store"
 )
 
 // pipxVenvsDir returns the directory holding pipx's per-app virtualenvs.

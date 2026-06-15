@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"installr/internal/pkg"
-	"installr/internal/store"
+	"whatsinstalled/internal/pkg"
+	"whatsinstalled/internal/store"
 )
 
 // BinScanner scans manually installed binaries in user bin directories.

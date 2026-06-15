@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"installr/internal/scanner"
-	"installr/internal/store"
+	"whatsinstalled/internal/scanner"
+	"whatsinstalled/internal/store"
 )
 
 var scanCmd = &cobra.Command{

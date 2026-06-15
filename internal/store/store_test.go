@@ -59,11 +59,11 @@ func TestUpsertAndList(t *testing.T) {
 	defer s.Close()
 
 	p := Package{
-		Name:        "nginx",
-		Version:     "1.24.0",
-		Source:      "apt",
-		Location:    "system",
-		Description: "web server",
+		Name:          "nginx",
+		Version:       "1.24.0",
+		Source:        "apt",
+		Location:      "system",
+		Description:   "web server",
 		AutoInstalled: false,
 	}
 	if err := s.Upsert(p); err != nil {

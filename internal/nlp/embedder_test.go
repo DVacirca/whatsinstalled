@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"installr/internal/store"
+	"whatsinstalled/internal/store"
 )
 
 func TestEmbedder(t *testing.T) {

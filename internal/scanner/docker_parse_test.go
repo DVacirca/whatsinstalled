@@ -4,12 +4,12 @@ import "testing"
 
 func TestParseDockerSize(t *testing.T) {
 	cases := map[string]int64{
-		"1.23GB":  1_230_000_000,
-		"456MB":   456_000_000,
-		"789kB":   789_000,
-		"12B":     12,
-		"1.5 GB":  1_500_000_000, // podman often inserts a space
-		"2TB":     2_000_000_000_000,
+		"1.23GB": 1_230_000_000,
+		"456MB":  456_000_000,
+		"789kB":  789_000,
+		"12B":    12,
+		"1.5 GB": 1_500_000_000, // podman often inserts a space
+		"2TB":    2_000_000_000_000,
 	}
 	for in, want := range cases {
 		got := parseDockerSize(in)

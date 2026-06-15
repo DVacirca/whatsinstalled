@@ -3,8 +3,8 @@ package search
 import (
 	"testing"
 
-	"installr/internal/nlp"
-	"installr/internal/store"
+	"whatsinstalled/internal/nlp"
+	"whatsinstalled/internal/store"
 )
 
 func pkg(name string, vec ...float64) store.Package {

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"installr/internal/store"
+	"whatsinstalled/internal/store"
 )
 
 func TestExpandQuery(t *testing.T) {

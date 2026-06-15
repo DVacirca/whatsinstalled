@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"installr/internal/pkg"
-	"installr/internal/store"
+	"whatsinstalled/internal/pkg"
+	"whatsinstalled/internal/store"
 )
 
 // pnpmGlobalDir returns the global pnpm packages directory.

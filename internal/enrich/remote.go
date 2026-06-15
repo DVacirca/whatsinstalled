@@ -119,7 +119,7 @@ func (re *RemoteEnricher) fetchJSON(url string, v any) bool {
 	if err != nil {
 		return false
 	}
-	req.Header.Set("User-Agent", "installr (https://github.com/dantevacirca/installr)")
+	req.Header.Set("User-Agent", "whatsinstalled (https://github.com/dantevacirca/whatsinstalled)")
 	resp, err := re.client.Do(req)
 	if err != nil {
 		return false

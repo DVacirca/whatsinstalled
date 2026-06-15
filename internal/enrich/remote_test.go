@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"installr/internal/store"
+	"whatsinstalled/internal/store"
 )
 
 // newTestEnricher returns a RemoteEnricher whose crates/rubygems base URLs point

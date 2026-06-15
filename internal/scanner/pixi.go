@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"installr/internal/pkg"
-	"installr/internal/store"
+	"whatsinstalled/internal/pkg"
+	"whatsinstalled/internal/store"
 )
 
 // PixiScanner scans pixi global environments.
@@ -61,13 +61,13 @@ func (s PixiScanner) Scan() ([]store.Package, error) {
 			}
 			if d.Name() == "pixi.toml" {
 				projectDir := filepath.Dir(path)
-			rel, _ := filepath.Rel(home, projectDir)
-			if rel == "" {
-				rel = projectDir
-			}
-			// Only go depth 2 from home to avoid crawling everything
-			depth := strings.Count(rel, string(filepath.Separator))
-			if depth <= 2 {
+				rel, _ := filepath.Rel(home, projectDir)
+				if rel == "" {
+					rel = projectDir
+				}
+				// Only go depth 2 from home to avoid crawling everything
+				depth := strings.Count(rel, string(filepath.Separator))
+				if depth <= 2 {
 					if envPkgs, err := s.scanEnv(projectDir, rel); err == nil {
 						pkgs = append(pkgs, envPkgs...)
 					}

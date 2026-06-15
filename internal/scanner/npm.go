@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"installr/internal/pkg"
-	"installr/internal/store"
+	"whatsinstalled/internal/pkg"
+	"whatsinstalled/internal/store"
 )
 
 // npmGlobalDir returns the global npm packages directory.
@@ -201,8 +201,8 @@ func (s NpmScanner) readPackageJSONDesc(pkgDir string) string {
 }
 
 type npmListRoot struct {
-	Name            string                 `json:"name"`
-	Version         string                 `json:"version"`
+	Name            string                `json:"name"`
+	Version         string                `json:"version"`
 	Dependencies    map[string]npmDepInfo `json:"dependencies"`
 	DevDependencies map[string]npmDepInfo `json:"devDependencies"`
 }

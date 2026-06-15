@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"installr/internal/pkg"
-	"installr/internal/store"
+	"whatsinstalled/internal/pkg"
+	"whatsinstalled/internal/store"
 )
 
 // CargoScanner scans Cargo-installed Rust binaries.

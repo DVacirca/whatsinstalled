@@ -14,7 +14,7 @@ import (
 	"github.com/nlpodyssey/cybertron/pkg/tasks"
 	"github.com/nlpodyssey/cybertron/pkg/tasks/textencoding"
 	"github.com/rs/zerolog"
-	"installr/internal/pkg"
+	"whatsinstalled/internal/pkg"
 )
 
 var (
@@ -36,7 +36,7 @@ type Embedder struct {
 // multiple times — the model is cached on disk.
 func LoadEmbedder() (*Embedder, error) {
 	home := pkg.HomeDir()
-	modelsDir = filepath.Join(home, ".installr", "models")
+	modelsDir = filepath.Join(home, ".whatsinstalled", "models")
 
 	// Ensure models directory exists
 	if err := os.MkdirAll(modelsDir, 0o755); err != nil {

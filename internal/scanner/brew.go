@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"installr/internal/store"
+	"whatsinstalled/internal/store"
 )
 
 // BrewScanner scans Homebrew packages.

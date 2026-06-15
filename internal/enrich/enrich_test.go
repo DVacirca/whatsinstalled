@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"installr/internal/store"
+	"whatsinstalled/internal/store"
 )
 
 func TestCountMissing(t *testing.T) {

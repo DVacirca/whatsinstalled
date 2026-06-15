@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"installr/internal/nlp"
-	"installr/internal/search"
-	"installr/internal/search/eval"
-	"installr/internal/store"
+	"whatsinstalled/internal/nlp"
+	"whatsinstalled/internal/search"
+	"whatsinstalled/internal/search/eval"
+	"whatsinstalled/internal/store"
 )
 
 var (
@@ -70,7 +70,7 @@ func selectVariants(flag string) ([]evalVariant, error) {
 var evalCmd = &cobra.Command{
 	Use:   "eval",
 	Short: "Evaluate semantic-search ranking quality (MRR / Hit@k)",
-	Long: `Scores the "Ask installr" ranker against a labelled query set.
+	Long: `Scores the "Ask whatsinstalled" ranker against a labelled query set.
 
 Combines a hand-curated set (internal/search/eval/queries.json) with synthetic
 known-item queries generated from package descriptions, runs them through the

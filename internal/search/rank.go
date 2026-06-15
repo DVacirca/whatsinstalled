@@ -1,4 +1,4 @@
-// Package search holds the pure ranking logic for "Ask installr" semantic
+// Package search holds the pure ranking logic for "Ask whatsinstalled" semantic
 // search. It is deliberately free of UI, DB, and network concerns so the TUI
 // and the eval harness score packages with the exact same code.
 package search
@@ -6,8 +6,8 @@ package search
 import (
 	"sort"
 
-	"installr/internal/nlp"
-	"installr/internal/store"
+	"whatsinstalled/internal/nlp"
+	"whatsinstalled/internal/store"
 )
 
 // Options tunes the hybrid ranking. The query-expansion toggle lives at the

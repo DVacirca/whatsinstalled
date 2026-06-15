@@ -1,15 +1,17 @@
+// Command enrich is a one-off helper that fills in missing package
+// descriptions in the whatsinstalled database and reports what remains.
 package main
 
 import (
 	"fmt"
 	"os"
 
-	"installr/internal/enrich"
-	"installr/internal/store"
+	"whatsinstalled/internal/enrich"
+	"whatsinstalled/internal/store"
 )
 
 func main() {
-	db, err := store.Open("/home/dv/.installr.db")
+	db, err := store.Open(store.DBPath())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error opening database: %v\n", err)
 		os.Exit(1)

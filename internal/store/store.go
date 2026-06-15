@@ -394,12 +394,12 @@ func scanRows(rows *sql.Rows) ([]Package, error) {
 
 // DBPath returns the default database path.
 func DBPath() string {
-	if p := os.Getenv("INSTALLR_DB"); p != "" {
+	if p := os.Getenv("WHATSINSTALLED_DB"); p != "" {
 		return p
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "installr.db"
+		return "whatsinstalled.db"
 	}
-	return home + "/.installr.db"
+	return home + "/.whatsinstalled.db"
 }

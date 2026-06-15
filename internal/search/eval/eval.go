@@ -1,4 +1,4 @@
-// Package eval is the data-driven evaluation harness for "Ask installr"
+// Package eval is the data-driven evaluation harness for "Ask whatsinstalled"
 // semantic search. It is deliberately model-free and deterministic: it loads a
 // labelled query set, builds synthetic known-item queries from the corpus, and
 // computes retrieval metrics (MRR, Hit@k) from a ranking the caller produces.
@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"strings"
 
-	"installr/internal/store"
+	"whatsinstalled/internal/store"
 )
 
 // curatedJSON is the hand-curated query set. Users replace/expand the entries

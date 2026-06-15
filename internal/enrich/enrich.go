@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"installr/internal/store"
+	"whatsinstalled/internal/store"
 )
 
 // Progress represents a single enrichment progress event.
