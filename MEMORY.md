@@ -475,3 +475,11 @@
 - **Mode-entry helpers**: `enterSearchMode`, `enterFilterMode`, `enterDetailMode`, `enterThemePicker`, `enterAbout`, `enterCommandPalette`, `triggerRescan` on `*model` — both `update.go` keyhandler and `palette.go` call them. No more split-brain.
 - **PackageText contexts**: all 22 sources now get descriptive context (was 6 of 22).
 - **Files**: `internal/search/rank.go`, `internal/enrich/enrich.go`, `internal/enrich/local.go`, `internal/store/store.go`, `internal/tui/model.go`, `internal/tui/update.go`, `internal/tui/palette.go`, `internal/nlp/embedder.go`, `ARCHITECTURE.md`, `MEMORY.md`
+
+### Session: Splash Screen Progress Fixes (2026-06-16)
+
+- **Misrouted phase-2 header**: `fullInitWithProgress` sent `source:"enrich"` (no colon) for the enrichment phase header, which fell into the scan handler branch (`else if msg.source != ""`) — displayed as "Scanning enrich... N found" and corrupted `totalFound`. Handler now has an explicit `msg.source == "enrich"` case.
+- **Embedding header overwritten**: Phase 3 header (`source:"embed", count:5182` total) and per-package progress (`count:i+1`) used the same source string. The header was immediately overwritten by the first per-package message, showing "Computing embeddings... 1 done" instead of 5182. Handler now distinguishes by `m.embedTotal == 0`.
+- **No X/Y progress**: Added `enrichTotal`/`embedTotal` to model. Handler stores totals from phase headers and formats enrichment/embedding as "Enriching gem... 23/385 packages" and "Computing embeddings... 2622/5182 (50%)".
+- **Default message**: `"Checking installed packages..."` → `"Initializing..."`.
+- **Files**: `internal/tui/model.go`, `internal/tui/update.go`

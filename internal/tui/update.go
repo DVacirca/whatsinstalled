@@ -281,6 +281,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.bgUpdating = false
 		m.scanSource = ""
 		m.scanCount = 0
+		m.enrichTotal = 0
+		m.embedTotal = 0
 		m.initCh = nil
 		m.totalFound = 0
 		cmds = append(cmds, m.loadData)
@@ -288,23 +290,43 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case scanProgressMsg:
 		m.scanSource = msg.source
 		m.scanCount = msg.count
-		// Build a human-readable progress line for the splash screen.
 		var progressMsg string
-		if strings.HasPrefix(msg.source, "enrich:") {
+
+		switch {
+		case msg.source == "enrich":
+			// Phase 2 header — the total we'll enrich (line 105 in commands.go).
+			m.enrichTotal = msg.count
+			m.initStep = "enrich"
+			progressMsg = fmt.Sprintf("Enriching descriptions... %d packages", msg.count)
+		case strings.HasPrefix(msg.source, "enrich:"):
+			// Per-source enrichment progress.  Count carries the number done.
 			m.initStep = "enrich"
 			src := strings.TrimPrefix(msg.source, "enrich:")
-			progressMsg = fmt.Sprintf("Enriching %s... %d done", src, msg.count)
-		} else if msg.source == "embed" {
+			if m.enrichTotal > 0 {
+				progressMsg = fmt.Sprintf("Enriching %s... %d/%d packages", src, msg.count, m.enrichTotal)
+			} else {
+				progressMsg = fmt.Sprintf("Enriching %s... %d done", src, msg.count)
+			}
+		case msg.source == "embed":
+			// Both the phase-3 header (carries total) and per-package progress
+			// (carries index+1) use source "embed".  Distinguish by whether we
+			// already have a stored total.
 			m.initStep = "embed"
-			progressMsg = fmt.Sprintf("Computing embeddings... %d done", msg.count)
-		} else if msg.source != "" {
+			if m.embedTotal == 0 {
+				m.embedTotal = msg.count
+				progressMsg = fmt.Sprintf("Computing embeddings... %d packages", msg.count)
+			} else {
+				pct := float64(msg.count) / float64(m.embedTotal) * 100
+				progressMsg = fmt.Sprintf("Computing embeddings... %d/%d (%.0f%%)", msg.count, m.embedTotal, pct)
+			}
+		case msg.source != "":
 			m.initStep = "scan"
 			m.totalFound += msg.count
 			progressMsg = fmt.Sprintf("Scanning %s... %d found (%d total)", msg.source, msg.count, m.totalFound)
-		} else if msg.count > 0 {
+		case msg.count > 0:
 			progressMsg = fmt.Sprintf("Using cached data... %d packages", msg.count)
-		} else {
-			progressMsg = "Checking installed packages..."
+		default:
+			progressMsg = "Initializing..."
 		}
 		m.initProgress = progressMsg
 		// Deduplicate: replace the last log line if it shares a prefix, else append.
@@ -339,6 +361,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.bgUpdating = false
 			m.scanSource = ""
 			m.scanCount = 0
+			m.enrichTotal = 0
+			m.embedTotal = 0
 			m.initStep = ""
 			m.initProgress = ""
 			m.initCh = nil

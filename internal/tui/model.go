@@ -59,6 +59,8 @@ type model struct {
 	totalFound   int                  // packages found so far during the scan phase
 	scanSource   string               // scanner currently running
 	scanCount    int                  // packages found by the current scanner
+	enrichTotal  int                  // total packages to enrich (set by phase 2 header)
+	embedTotal   int                  // total packages to embed (set by phase 3 header)
 	scanErr      error
 
 	err error
@@ -106,7 +108,7 @@ func NewModel(s *store.Store) *model {
 		counts:           make(map[string]int),
 		hideAuto:         true, // dependency packages are noise by default
 		scanning:         true,
-		initLogs:         []string{"Checking installed packages..."},
+		initLogs:         []string{"Initializing..."},
 		availableSources: []string{""},
 		availableLabels:  []string{"All"},
 	}
@@ -224,6 +226,8 @@ func (m *model) triggerRescan() tea.Cmd {
 	m.bgUpdating = true
 	m.scanSource = ""
 	m.scanCount = 0
+	m.enrichTotal = 0
+	m.embedTotal = 0
 	m.initStep = "scan"
 	return func() tea.Msg { return m.fullInitWithProgress() }
 }
