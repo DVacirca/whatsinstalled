@@ -13,6 +13,10 @@ type RemoteEnricher struct {
 	client  *http.Client
 	cache   *Cache
 	verbose bool
+
+	// Registry base URLs. Overridable in tests; default to the real registries.
+	cratesURL   string
+	rubygemsURL string
 }
 
 // NewRemoteEnricher creates a remote enricher with the given cache.
@@ -21,8 +25,10 @@ func NewRemoteEnricher(cache *Cache, verbose bool) *RemoteEnricher {
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		cache:   cache,
-		verbose: verbose,
+		cache:       cache,
+		verbose:     verbose,
+		cratesURL:   "https://crates.io/api/v1/crates",
+		rubygemsURL: "https://rubygems.org/api/v1/gems",
 	}
 }
 
@@ -136,7 +142,7 @@ func (re *RemoteEnricher) fetchCrates(name string) string {
 			Description string `json:"description"`
 		} `json:"crate"`
 	}
-	if !re.fetchJSON(fmt.Sprintf("https://crates.io/api/v1/crates/%s", name), &data) {
+	if !re.fetchJSON(fmt.Sprintf("%s/%s", re.cratesURL, name), &data) {
 		return ""
 	}
 	return data.Crate.Description
@@ -148,7 +154,7 @@ func (re *RemoteEnricher) fetchRubyGems(name string) string {
 		Info    string `json:"info"`
 		Summary string `json:"summary"`
 	}
-	if !re.fetchJSON(fmt.Sprintf("https://rubygems.org/api/v1/gems/%s.json", name), &data) {
+	if !re.fetchJSON(fmt.Sprintf("%s/%s.json", re.rubygemsURL, name), &data) {
 		return ""
 	}
 	if data.Summary != "" {

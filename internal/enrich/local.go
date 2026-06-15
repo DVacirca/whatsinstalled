@@ -322,7 +322,13 @@ func (le *LocalEnricher) EnrichBrew(names []string) map[string]string {
 	if err != nil {
 		return results
 	}
+	return parseBrewJSON(out)
+}
 
+// parseBrewJSON extracts name -> description from `brew info --json=v2` output,
+// covering both formulae and casks.
+func parseBrewJSON(out []byte) map[string]string {
+	results := make(map[string]string)
 	var data struct {
 		Formulae []struct {
 			Name string `json:"name"`
@@ -360,7 +366,13 @@ func (le *LocalEnricher) EnrichPacman(names []string) map[string]string {
 	if err != nil {
 		return results
 	}
+	return parsePacmanInfo(out)
+}
 
+// parsePacmanInfo extracts name -> description from `pacman -Qi` output, which
+// lists "Name : x" / "Description : y" pairs in per-package blocks.
+func parsePacmanInfo(out []byte) map[string]string {
+	results := make(map[string]string)
 	var currentName string
 	scanner := bufio.NewScanner(bytes.NewReader(out))
 	for scanner.Scan() {
