@@ -62,6 +62,8 @@ func (s PipxScanner) Scan() ([]store.Package, error) {
 			UpdatedAt: time.Now(),
 			User:      pkg.CurrentUser(),
 			LastUsed:  pkg.GetLastUsed(location),
+			SizeBytes: pkg.PathSize(location),
+			AddedAt:   pkg.GetModTime(location),
 		})
 	}
 	return pkgs, nil

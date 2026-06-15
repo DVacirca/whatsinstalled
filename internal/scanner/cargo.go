@@ -45,6 +45,8 @@ func (s CargoScanner) Scan() ([]store.Package, error) {
 		if info.Mode()&0o111 == 0 {
 			continue
 		}
+		sz := info.Size()
+		mt := info.ModTime()
 		pkgs = append(pkgs, store.Package{
 			Name:      entry.Name(),
 			Version:   "",
@@ -52,6 +54,9 @@ func (s CargoScanner) Scan() ([]store.Package, error) {
 			Location:  binDir,
 			UpdatedAt: time.Now(),
 			User:      pkg.CurrentUser(),
+			SizeBytes: &sz,
+			AddedAt:   &mt,
+			LastUsed:  pkg.GetLastUsed(filepath.Join(binDir, entry.Name())),
 		})
 	}
 	return pkgs, nil

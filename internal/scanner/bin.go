@@ -82,6 +82,8 @@ func (s BinScanner) Scan() ([]store.Package, error) {
 			sz := info.Size()
 			p.SizeBytes = &sz
 			p.LastUsed = pkg.GetLastUsed(filepath.Join(dir, name))
+			mt := info.ModTime()
+			p.AddedAt = &mt
 			pkgs = append(pkgs, p)
 		}
 	}

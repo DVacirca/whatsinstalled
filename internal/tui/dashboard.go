@@ -1124,7 +1124,8 @@ func (m *model) renderDetailOverlay(w, h int) string {
 			{"Location", sel.Location},
 			{"User", sel.User},
 			{"Size", formatSize(sel.SizeBytes)},
-			{"Last Used", formatLastUsed(sel.LastUsed)},
+			{"Added", formatRelative(sel.AddedAt)},
+			{"Last Used", formatRelative(sel.LastUsed)},
 		}
 		for _, f := range fields {
 			key := bottomKeyStyle.Render(f.k + ":")

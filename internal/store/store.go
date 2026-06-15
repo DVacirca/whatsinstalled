@@ -24,6 +24,7 @@ type Package struct {
 	User          string // who installed it
 	UpdatedAt     time.Time
 	LastUsed      *time.Time // access time of package directory
+	AddedAt       *time.Time // mtime of package files (reliable install/update time)
 	Embedding     string     // JSON array of float64
 }
 
@@ -69,6 +70,7 @@ func migrate(db *sql.DB) error {
 			user TEXT,
 			updated_at INTEGER,
 			last_used INTEGER,
+			added_at INTEGER,
 			embedding TEXT
 		);
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_pkg ON packages(name, source, location);
@@ -80,6 +82,7 @@ func migrate(db *sql.DB) error {
 	// Migrate existing databases: add columns if missing
 	_, _ = db.Exec(`ALTER TABLE packages ADD COLUMN user TEXT`)
 	_, _ = db.Exec(`ALTER TABLE packages ADD COLUMN last_used INTEGER`)
+	_, _ = db.Exec(`ALTER TABLE packages ADD COLUMN added_at INTEGER`)
 	_, _ = db.Exec(`ALTER TABLE packages ADD COLUMN embedding TEXT`)
 
 	// Enrichment cache table for API responses
@@ -107,9 +110,14 @@ func (s *Store) Upsert(p Package) error {
 		v := p.LastUsed.UnixMilli()
 		lastUsed = &v
 	}
+	var addedAt *int64
+	if p.AddedAt != nil {
+		v := p.AddedAt.UnixMilli()
+		addedAt = &v
+	}
 	_, err := s.db.Exec(`
-		INSERT INTO packages (name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO packages (name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used, added_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(name, source, location) DO UPDATE SET
 			version=excluded.version,
 			size_bytes=excluded.size_bytes,
@@ -118,15 +126,16 @@ func (s *Store) Upsert(p Package) error {
 			auto_installed=excluded.auto_installed,
 			user=excluded.user,
 			updated_at=excluded.updated_at,
-			last_used=excluded.last_used;
-	`, p.Name, p.Version, p.Source, p.Location, p.SizeBytes, p.Description, p.InstalledAt, auto, p.User, now, lastUsed)
+			last_used=excluded.last_used,
+			added_at=excluded.added_at;
+	`, p.Name, p.Version, p.Source, p.Location, p.SizeBytes, p.Description, p.InstalledAt, auto, p.User, now, lastUsed, addedAt)
 	return err
 }
 
 // List returns packages matching an optional source filter ("" for all).
 func (s *Store) List(sourceFilter string, hideAuto bool) ([]Package, error) {
 	where, args := whereClause(sourceFilter, "", hideAuto)
-	rows, err := s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used FROM packages`+where+` ORDER BY name COLLATE NOCASE`, args...)
+	rows, err := s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used, added_at FROM packages`+where+` ORDER BY name COLLATE NOCASE`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list packages: %w", err)
 	}
@@ -138,7 +147,7 @@ func (s *Store) List(sourceFilter string, hideAuto bool) ([]Package, error) {
 // Search returns packages matching a name substring within an optional source filter.
 func (s *Store) Search(query, sourceFilter string, hideAuto bool) ([]Package, error) {
 	where, args := whereClause(sourceFilter, query, hideAuto)
-	rows, err := s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used FROM packages`+where+` ORDER BY name COLLATE NOCASE`, args...)
+	rows, err := s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used, added_at FROM packages`+where+` ORDER BY name COLLATE NOCASE`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("search packages: %w", err)
 	}
@@ -174,7 +183,7 @@ func whereClause(source, nameLike string, hideAuto bool) (string, []any) {
 // (case-insensitive substring). Used by the live Results-tab filter.
 func (s *Store) SearchText(query string) ([]Package, error) {
 	like := "%" + query + "%"
-	rows, err := s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used FROM packages WHERE name LIKE ? OR description LIKE ? ORDER BY name COLLATE NOCASE`, like, like)
+	rows, err := s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used, added_at FROM packages WHERE name LIKE ? OR description LIKE ? ORDER BY name COLLATE NOCASE`, like, like)
 	if err != nil {
 		return nil, fmt.Errorf("search packages: %w", err)
 	}
@@ -237,7 +246,7 @@ func (s *Store) UpdateEmbedding(id int64, embeddingJSON string) error {
 
 // ListWithoutEmbeddings returns packages that have no embedding cached.
 func (s *Store) ListWithoutEmbeddings() ([]Package, error) {
-	rows, err := s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used FROM packages WHERE embedding IS NULL`)
+	rows, err := s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used, added_at FROM packages WHERE embedding IS NULL`)
 	if err != nil {
 		return nil, fmt.Errorf("list without embeddings: %w", err)
 	}
@@ -247,7 +256,7 @@ func (s *Store) ListWithoutEmbeddings() ([]Package, error) {
 
 // ListWithEmbeddings returns all packages with their embeddings.
 func (s *Store) ListWithEmbeddings() ([]Package, error) {
-	rows, err := s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used, embedding FROM packages`)
+	rows, err := s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used, added_at, embedding FROM packages`)
 	if err != nil {
 		return nil, fmt.Errorf("list with embeddings: %w", err)
 	}
@@ -261,8 +270,9 @@ func (s *Store) ListWithEmbeddings() ([]Package, error) {
 		var updated int64
 		var user sql.NullString
 		var lastUsed sql.NullInt64
+		var addedAt sql.NullInt64
 		var embedding sql.NullString
-		if err := rows.Scan(&p.ID, &p.Name, &p.Version, &p.Source, &p.Location, &size, &p.Description, &p.InstalledAt, &auto, &user, &updated, &lastUsed, &embedding); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Version, &p.Source, &p.Location, &size, &p.Description, &p.InstalledAt, &auto, &user, &updated, &lastUsed, &addedAt, &embedding); err != nil {
 			return nil, err
 		}
 		if size.Valid {
@@ -274,6 +284,10 @@ func (s *Store) ListWithEmbeddings() ([]Package, error) {
 		if lastUsed.Valid {
 			t := time.UnixMilli(lastUsed.Int64)
 			p.LastUsed = &t
+		}
+		if addedAt.Valid {
+			t := time.UnixMilli(addedAt.Int64)
+			p.AddedAt = &t
 		}
 		p.AutoInstalled = auto != 0
 		p.UpdatedAt = time.UnixMilli(updated)
@@ -290,9 +304,9 @@ func (s *Store) ListWithoutDescriptions(sourceFilter string) ([]Package, error) 
 	var rows *sql.Rows
 	var err error
 	if sourceFilter == "" {
-		rows, err = s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used FROM packages WHERE description IS NULL OR description = '' ORDER BY name COLLATE NOCASE`)
+		rows, err = s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used, added_at FROM packages WHERE description IS NULL OR description = '' ORDER BY name COLLATE NOCASE`)
 	} else {
-		rows, err = s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used FROM packages WHERE (description IS NULL OR description = '') AND source = ? ORDER BY name COLLATE NOCASE`, sourceFilter)
+		rows, err = s.db.Query(`SELECT id, name, version, source, location, size_bytes, description, installed_at, auto_installed, user, updated_at, last_used, added_at FROM packages WHERE (description IS NULL OR description = '') AND source = ? ORDER BY name COLLATE NOCASE`, sourceFilter)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("list without descriptions: %w", err)
@@ -353,7 +367,8 @@ func scanRows(rows *sql.Rows) ([]Package, error) {
 		var updated int64
 		var user sql.NullString
 		var lastUsed sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Name, &p.Version, &p.Source, &p.Location, &size, &p.Description, &p.InstalledAt, &auto, &user, &updated, &lastUsed); err != nil {
+		var addedAt sql.NullInt64
+		if err := rows.Scan(&p.ID, &p.Name, &p.Version, &p.Source, &p.Location, &size, &p.Description, &p.InstalledAt, &auto, &user, &updated, &lastUsed, &addedAt); err != nil {
 			return nil, err
 		}
 		if size.Valid {
@@ -365,6 +380,10 @@ func scanRows(rows *sql.Rows) ([]Package, error) {
 		if lastUsed.Valid {
 			t := time.UnixMilli(lastUsed.Int64)
 			p.LastUsed = &t
+		}
+		if addedAt.Valid {
+			t := time.UnixMilli(addedAt.Int64)
+			p.AddedAt = &t
 		}
 		p.AutoInstalled = auto != 0
 		p.UpdatedAt = time.UnixMilli(updated)

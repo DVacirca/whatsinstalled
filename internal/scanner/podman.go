@@ -59,6 +59,8 @@ func (s PodmanScanner) Scan() ([]store.Package, error) {
 			Location:  "local",
 			UpdatedAt: time.Now(),
 			User:      pkg.CurrentUser(),
+			SizeBytes: parseDockerSize(img.Size),
+			AddedAt:   parseDockerCreated(img.CreatedAt),
 		}
 		pkgs = append(pkgs, p)
 	}

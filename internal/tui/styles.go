@@ -397,7 +397,9 @@ func min(a, b int) int {
 	return b
 }
 
-func formatLastUsed(t *time.Time) string {
+// formatRelative renders a *time.Time as a compact age ("3d", "2M"), or "-" if
+// nil. Shared by the Added (mtime) and Used (atime) columns.
+func formatRelative(t *time.Time) string {
 	if t == nil {
 		return "-"
 	}

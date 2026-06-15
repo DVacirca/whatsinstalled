@@ -67,6 +67,8 @@ func (s AppImageScanner) Scan() ([]store.Package, error) {
 				UpdatedAt: time.Now(),
 				User:      pkg.CurrentUser(),
 				LastUsed:  pkg.GetLastUsed(path),
+				SizeBytes: pkg.PathSize(path),
+				AddedAt:   pkg.GetModTime(path),
 			})
 		}
 	}

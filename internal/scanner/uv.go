@@ -59,6 +59,8 @@ func parseUvToolList(out string) []store.Package {
 			UpdatedAt: time.Now(),
 			User:      pkg.CurrentUser(),
 			LastUsed:  pkg.GetLastUsed(location),
+			SizeBytes: pkg.PathSize(location),
+			AddedAt:   pkg.GetModTime(location),
 		})
 	}
 	return pkgs

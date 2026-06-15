@@ -14,6 +14,42 @@ func TestOpen(t *testing.T) {
 	defer s.Close()
 }
 
+func TestUpsertRoundTripsSizeAndTimes(t *testing.T) {
+	s, err := Open(t.TempDir() + "/test.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	sz := int64(4096)
+	added := time.Now().Add(-72 * time.Hour).Truncate(time.Millisecond)
+	used := time.Now().Add(-1 * time.Hour).Truncate(time.Millisecond)
+	if err := s.Upsert(Package{
+		Name: "ripgrep", Source: "cargo", Location: "/home/u/.cargo/bin",
+		SizeBytes: &sz, AddedAt: &added, LastUsed: &used,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	pkgs, err := s.List("cargo", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pkgs) != 1 {
+		t.Fatalf("got %d packages, want 1", len(pkgs))
+	}
+	got := pkgs[0]
+	if got.SizeBytes == nil || *got.SizeBytes != sz {
+		t.Fatalf("SizeBytes = %v, want %d", got.SizeBytes, sz)
+	}
+	if got.AddedAt == nil || !got.AddedAt.Equal(added) {
+		t.Fatalf("AddedAt = %v, want %v", got.AddedAt, added)
+	}
+	if got.LastUsed == nil || !got.LastUsed.Equal(used) {
+		t.Fatalf("LastUsed = %v, want %v", got.LastUsed, used)
+	}
+}
+
 func TestUpsertAndList(t *testing.T) {
 	db := t.TempDir() + "/test.db"
 	s, err := Open(db)

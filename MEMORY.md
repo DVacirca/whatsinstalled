@@ -455,3 +455,14 @@
 
 #### Plans for the metadata model
 - Two plan docs added under `plans/`: `specialized-metadata-model.md` (tiny distilled generative model, teacher→student) and `metadata-enrichment-pipeline.md` (Go integration via a `MetadataGenerator` interface, init-time generation, embed-feed). Ask query path stays pure embedding retrieval; the generative model runs only at init.
+
+### Session: Size + Added columns, reliable per-source (2026-06-15)
+
+- Added a `Used` sibling column **`Added`** (store `Package.AddedAt`, col `added_at INTEGER`) = mtime of the package's own files. mtime is reliable (not suppressed by noatime/relatime, unlike the atime-based `Used`).
+- **Size/Added are only populated where the path resolves to the package's OWN files** — otherwise the number would be wrong/misleading, so we leave "-":
+  - file stat: bin, cargo, appimage (size = file size, added = mtime).
+  - dedicated per-package dir (du via `pkg.PathSize`): pipx, uv venvs.
+  - native: apt (dpkg Installed-Size, pre-existing), docker/podman (`parseDockerSize`/`parseDockerCreated` on the `{{json .}}` Size/CreatedAt).
+  - NOT populated (Location is a shared container or placeholder like "system"/env name → per-package size not reliable): pip, conda, npm, pnpm, yarn, gem, pixi, snap, nix, pacman, yay, brew, go, flatpak.
+- Helpers: `pkg.PathSize(path)` (file size or recursive du), `pkg.GetModTime(path)`. TUI: `formatRelative` (renamed from `formatLastUsed`) shared by Added+Used; tree now has 8 columns (`spaces=7`).
+- Done at scan time (cheap: file stat + small venv du), not lazily — broad du of shared dirs was rejected as unreliable per-package.

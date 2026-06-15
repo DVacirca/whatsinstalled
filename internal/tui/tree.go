@@ -250,9 +250,10 @@ func (tv *treeView) renderLeafNode(n *treeNode, selected bool, width int) string
 	user := truncate(p.User, cols.user)
 	size := formatSize(p.SizeBytes)
 	sizeStr := truncate(size, cols.size)
-	lastUsed := formatLastUsed(p.LastUsed)
+	added := truncate(formatRelative(p.AddedAt), cols.added)
+	lastUsed := formatRelative(p.LastUsed)
 
-	line := fmt.Sprintf("%s%-*s %-*s %-*s %-*s %-*s %-*s %-*s",
+	line := fmt.Sprintf("%s%-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s",
 		indent,
 		cols.name, name,
 		cols.ver, ver,
@@ -260,6 +261,7 @@ func (tv *treeView) renderLeafNode(n *treeNode, selected bool, width int) string
 		cols.loc, loc,
 		cols.user, user,
 		cols.size, sizeStr,
+		cols.added, added,
 		cols.used, lastUsed)
 
 	if selected {
@@ -273,27 +275,28 @@ func (tv *treeView) renderLeafNode(n *treeNode, selected bool, width int) string
 }
 
 type colWidths struct {
-	name, ver, src, loc, user, size, used int
+	name, ver, src, loc, user, size, added, used int
 }
 
 func calcColumnWidths(availWidth int) colWidths {
-	const spaces = 6 // spaces between 7 columns
+	const spaces = 7 // spaces between 8 columns
 	const (
-		minName = 6
-		minVer  = 3
-		minSrc  = 3
-		minLoc  = 4
-		minUser = 3
-		minSize = 3
-		minUsed = 3
+		minName  = 6
+		minVer   = 3
+		minSrc   = 3
+		minLoc   = 4
+		minUser  = 3
+		minSize  = 3
+		minAdded = 3
+		minUsed  = 3
 	)
-	minContent := minName + minVer + minSrc + minLoc + minUser + minSize + minUsed
-	target := colWidths{14, 8, 5, 12, 6, 6, 6}
-	targetContent := target.name + target.ver + target.src + target.loc + target.user + target.size + target.used
+	minContent := minName + minVer + minSrc + minLoc + minUser + minSize + minAdded + minUsed
+	target := colWidths{14, 8, 5, 12, 6, 6, 6, 6}
+	targetContent := target.name + target.ver + target.src + target.loc + target.user + target.size + target.added + target.used
 
 	contentWidth := availWidth - spaces
 	if contentWidth <= 0 {
-		return colWidths{1, 1, 1, 1, 1, 1, 1}
+		return colWidths{1, 1, 1, 1, 1, 1, 1, 1}
 	}
 
 	// Helper to distribute remaining space proportionally.
@@ -321,11 +324,12 @@ func calcColumnWidths(availWidth int) colWidths {
 		scale(minLoc, target.loc),
 		scale(minUser, target.user),
 		scale(minSize, target.size),
+		scale(minAdded, target.added),
 		scale(minUsed, target.used),
 	}
 
 	// Ensure total content fits exactly; subtract overflow from location.
-	total := c.name + c.ver + c.src + c.loc + c.user + c.size + c.used
+	total := c.name + c.ver + c.src + c.loc + c.user + c.size + c.added + c.used
 	if total > contentWidth {
 		c.loc -= total - contentWidth
 		if c.loc < 1 {
@@ -365,7 +369,7 @@ func renderTreeHeader(width int) string {
 	availWidth := width - lipgloss.Width(indent)
 	cols := calcColumnWidths(availWidth)
 
-	line := fmt.Sprintf("%s%-*s %-*s %-*s %-*s %-*s %-*s %-*s",
+	line := fmt.Sprintf("%s%-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s",
 		indent,
 		cols.name, "Name",
 		cols.ver, "Version",
@@ -373,6 +377,7 @@ func renderTreeHeader(width int) string {
 		cols.loc, "Location",
 		cols.user, "User",
 		cols.size, "Size",
+		cols.added, "Added",
 		cols.used, "Used")
 	pad := width - lipgloss.Width(line)
 	if pad > 0 {

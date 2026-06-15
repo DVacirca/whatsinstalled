@@ -59,6 +59,8 @@ func (s DockerScanner) Scan() ([]store.Package, error) {
 			Location:  "local",
 			UpdatedAt: time.Now(),
 			User:      pkg.FileOwner("/var/lib/docker"),
+			SizeBytes: parseDockerSize(img.Size),
+			AddedAt:   parseDockerCreated(img.CreatedAt),
 		}
 		if p.User == "" {
 			p.User = pkg.FileOwner(pkg.HomeDir() + ".docker")
