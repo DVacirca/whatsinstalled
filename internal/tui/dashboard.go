@@ -61,6 +61,10 @@ var paletteCommands = []commandDef{
 		m.themePickerIndex = currentThemeIndex()
 		return nil
 	}},
+	{"About", "About installr", "i", false, func(m *model) tea.Cmd {
+		m.mode = "about"
+		return nil
+	}},
 }
 
 // filteredPaletteCommands returns commands matching the current query.
@@ -418,6 +422,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		}
 
+		if m.mode == "about" {
+			switch msg.String() {
+			case "esc", "q", "ctrl+c", "enter", "i":
+				m.mode = ""
+			}
+			return m, tea.Batch(cmds...)
+		}
+
 		if m.mode == "detail" {
 			switch msg.String() {
 			case "esc", "q", "ctrl+c", "d", "enter":
@@ -519,6 +531,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "t":
 			m.mode = "theme-picker"
 			m.themePickerIndex = currentThemeIndex()
+		case "i":
+			m.mode = "about"
 		case "r":
 			m.scanning = true
 			m.bgUpdating = true
@@ -914,6 +928,13 @@ func (m *model) View() string {
 		result = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
 	}
 
+	// ── About overlay ──
+	if m.mode == "about" {
+		modalWidth := min(54, m.width-4)
+		modal := modalBorderStyle.Width(modalWidth).Render(aboutModalContent(modalWidth))
+		result = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
+	}
+
 	// ── Command palette overlay ──
 	if m.cmdPaletteOpen {
 		modalWidth := min(50, m.width-4)
@@ -1210,6 +1231,30 @@ func autoToggleLabel(hideAuto bool) string {
 	return "Hide deps"
 }
 
+// About modal text. Kept as package vars so tests can assert on them.
+const (
+	aboutAuthor = "by Dante Vacirca + Claude"
+	aboutBlurb  = "One view of everything installed across every package " +
+		"manager, language ecosystem, and loose binary — so the " +
+		"tools you've accumulated stop being invisible. Built to " +
+		"answer \"what do I actually have, and what is it for?\""
+)
+
+// aboutModalContent renders the inner content of the About modal at the given
+// width (excluding the surrounding border).
+func aboutModalContent(modalWidth int) string {
+	lines := []string{
+		modalTitleStyle.Render("installr " + version.Version),
+		"",
+		lipgloss.NewStyle().Foreground(fgDim).Render(aboutAuthor),
+		"",
+		lipgloss.NewStyle().Foreground(fg).Width(modalWidth - 2).Render(aboutBlurb),
+		"",
+		lipgloss.NewStyle().Foreground(fgDim).Render("Esc to close"),
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+}
+
 func (m *model) renderHelpPanel(w, h int) string {
 	keys := []struct{ k, v string }{
 		{"↑↓ / jk", "Navigate"},
@@ -1220,6 +1265,7 @@ func (m *model) renderHelpPanel(w, h int) string {
 		{"?", "Ask (experimental)"},
 		{":", "Command"},
 		{"t", "Theme"},
+		{"i", "About"},
 		{"d", "Details"},
 		{"r", "Rescan"},
 		{"q", "Quit"},
