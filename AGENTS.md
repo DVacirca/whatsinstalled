@@ -31,8 +31,8 @@ package.
 ## Layout
 ```
 cmd/whatsinstalled        entrypoint
-cmd/enrich          one-off enrichment helper
-internal/cmd        cobra commands (root, scan, eval)
+cmd/enrich                one-off enrichment helper
+internal/cmd              cobra commands (root, scan, eval)
 internal/scanner    one file per package manager; AllScanners registry + DiscoverScanners
 internal/store      SQLite (modernc.org/sqlite), WAL mode; Package model, embeddings, enrichment_cache
 internal/enrich     per-source description enrichment: local tools then registries (PyPI, npm, crates.io, rubygems, brew, pacman); cached, timeouts
@@ -47,7 +47,7 @@ internal/tui        Bubble Tea dashboard, tree view, styles, themes
 - Embedding model cached at `~/.whatsinstalled/models/sentence-transformers` (~177MB,
   384-dim). First run downloads it; `nlp.LoadEmbedder()` returns an error if absent
   and search degrades to a substring fallback.
-- Init pipeline (`fullInitWithProgress` in `internal/tui/dashboard.go`) scans →
+- Init pipeline (`fullInitWithProgress` in `internal/tui/commands.go`) scans →
   enriches → embeds, so search is just one query-encode + in-memory scoring (fast,
   cannot hang). Do NOT reintroduce enrichment/embedding into the search hot path.
 
@@ -72,5 +72,5 @@ internal/tui        Bubble Tea dashboard, tree view, styles, themes
 - Log non-obvious discoveries/gotchas to MEMORY.md immediately, not at session end.
 
 ## Key docs
-- `IDEA.md` pitch · `PLAN.md` design · `REQUIREMENTS.md` spec · `TECH.md` stack ·
-  `MEMORY.md` running log of decisions, gotchas, and findings (read this first).
+- `docs/IDEA.md` pitch · `docs/PLAN.md` design · `docs/REQUIREMENTS.md` spec · `docs/TECH.md` stack ·
+  `docs/MEMORY.md` running log of decisions, gotchas, and findings (read this first).

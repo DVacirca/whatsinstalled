@@ -18,16 +18,16 @@ hub every stage reads from and writes back to.
 
 ```mermaid
 flowchart TD
-    subgraph init["🛠️ Initialisation pipeline · fullInitWithProgress()"]
+    subgraph init["Initialisation pipeline · fullInitWithProgress"]
         direction TB
         SCAN["SCAN<br/>22 package managers · parallel goroutines<br/>Scan() → []store.Package"]
         ENRICH["ENRICHMENT<br/>local tools + remote registries<br/>30-day SQLite cache"]
         EMBED["NLP / EMBEDDING<br/>all-MiniLM-L6-v2 · 384-dim<br/>cybertron (pure Go)"]
     end
 
-    STORE[("STORE · SQLite (WAL)<br/>~/.whatsinstalled.db<br/>packages + enrichment_cache")]
+    STORE[("STORE · SQLite WAL<br/>~/.whatsinstalled.db<br/>packages + enrichment_cache")]
 
-    subgraph runtime["▶️ Runtime"]
+    subgraph runtime["Runtime"]
         direction TB
         SEARCH["search.Rank()<br/>cosine similarity (keyword boost 0)<br/>threshold 0.05 · TopK 50"]
         TUI["TUI DASHBOARD · Bubble Tea<br/>tree view · source tabs · overlays"]
@@ -119,7 +119,6 @@ flowchart LR
     RUN["app.go · Run()<br/>builds & starts tea.Program"]
 
     subgraph loop["Bubble Tea loop"]
-        direction TB
         INIT["Init()"]
         UPDATE["Update(msg)<br/>routes keys by mode"]
         VIEW["View()<br/>+ overlay renderers"]
@@ -383,13 +382,13 @@ in `internal/nlp/search.go`. The keyword boost built on top of it
 was shown to hurt relevance (MRR ~0.53 vs ~0.64 semantic-only), so the
 production default now uses `KeywordWeight = 0`.
 
-The planned fix is a two-track body of work already specced under `plans/`:
+The planned fix is a two-track body of work already specced under `docs/upcoming-features/`:
 
-- **Specialized metadata model** (`plans/specialized-metadata-model.md`) — a
+- **Specialized metadata model** (`upcoming-features/specialized-metadata-model.md`) — a
   tiny, local generative model, distilled from a larger teacher LLM and
   specialized on Linux packages, that emits structured metadata per package:
   `categories`, `associations`, `use_cases`, `related_tools`, `aliases`.
-- **Metadata enrichment pipeline** (`plans/metadata-enrichment-pipeline.md`) — a
+- **Metadata enrichment pipeline** (`upcoming-features/metadata-enrichment-pipeline.md`) — a
   new `internal/metadata` package with a `Generator` interface (stub / teacher /
   local backends) that runs **only at init**, writes the metadata, and feeds the
   `use_cases` text into the existing MiniLM embedding path.
@@ -410,5 +409,5 @@ pure vector ranking that cannot hang.
 | **Portability** | Tuned for Debian/Ubuntu and WSL; macOS and other distros are partially covered. | Broaden scanner coverage and add cross-distro CI. |
 | **Model bootstrap** | First run downloads a ~177 MB model; absent it, search silently degrades to substring matching. | Offer a smaller/quantized model option and make the degraded mode more visible in the UI. |
 
-See also `PLAN.md` for the original design and the `plans/` directory for the
+See also `docs/PLAN.md` for the original design and the `docs/upcoming-features/` directory for the
 detailed work breakdowns.

@@ -9,3 +9,4 @@ Package managers supported:
 - pip (global + local Python venvs)
 - conda (all environments)
 - bin (manual binaries in user directories like ~/.local/bin)
+...
