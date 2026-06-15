@@ -176,53 +176,6 @@ func (e *Enricher) remainingNames(names []string, results map[string]string) []s
 	return remaining
 }
 
-// EnrichBin is a convenience method for enriching bin packages.
-func (e *Enricher) EnrichBin(pkgs []store.Package, onProgress ProgressCallback) map[string]string {
-	names := make([]string, len(pkgs))
-	for i, p := range pkgs {
-		names[i] = p.Name
-	}
-	return e.local.EnrichBin(names)
-}
-
-// EnrichPip is a convenience method for enriching pip packages.
-func (e *Enricher) EnrichPip(pkgs []store.Package, onProgress ProgressCallback) map[string]string {
-	names := make([]string, len(pkgs))
-	for i, p := range pkgs {
-		names[i] = p.Name
-	}
-
-	// Try local first
-	results := e.local.EnrichPip(names)
-	remaining := e.remainingNames(names, results)
-	if len(remaining) > 0 {
-		remoteMap := e.remote.EnrichPip(remaining)
-		for k, v := range remoteMap {
-			results[k] = v
-		}
-	}
-	return results
-}
-
-// EnrichNpm is a convenience method for enriching npm packages.
-func (e *Enricher) EnrichNpm(pkgs []store.Package, onProgress ProgressCallback) map[string]string {
-	names := make([]string, len(pkgs))
-	for i, p := range pkgs {
-		names[i] = p.Name
-	}
-
-	// Try local first
-	results := e.local.EnrichNpm(names)
-	remaining := e.remainingNames(names, results)
-	if len(remaining) > 0 {
-		remoteMap := e.remote.EnrichNpm(remaining)
-		for k, v := range remoteMap {
-			results[k] = v
-		}
-	}
-	return results
-}
-
 // CountMissing returns the number of packages without descriptions.
 func CountMissing(pkgs []store.Package) int {
 	count := 0
