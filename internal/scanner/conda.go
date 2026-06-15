@@ -116,6 +116,10 @@ func (s CondaScanner) scanEnv(envPath string) ([]store.Package, error) {
 			p.Description = fmt.Sprintf("channel: %s", r.Channel)
 		}
 
+		// Mark implicit dependencies: packages where the user never explicitly
+		// requested them (conda-meta requested_spec is null/empty).
+		p.AutoInstalled = s.isCondaDependency(envPath, r.Name, r.Version, r.BuildString)
+
 		// Determine package directory for last-used
 		var pkgDir string
 		if sitePkgDir != "" {
@@ -174,6 +178,26 @@ func (s CondaScanner) parseMetadataSummary(r io.Reader) string {
 }
 
 var _ Scanner = CondaScanner{}
+
+// isCondaDependency checks whether a conda package is an implicit dependency
+// (requested_spec in conda-meta JSON is null/none/empty).
+func (s CondaScanner) isCondaDependency(envPath, name, version, build string) bool {
+	metaPath := filepath.Join(envPath, "conda-meta", name+"-"+version+"-"+build+".json")
+	f, err := os.Open(metaPath)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	var meta struct {
+		RequestedSpec *string `json:"requested_spec"`
+	}
+	if json.NewDecoder(f).Decode(&meta) != nil {
+		return false
+	}
+	// nil, empty string, or literal "None" all mean implicit dependency.
+	return meta.RequestedSpec == nil || *meta.RequestedSpec == "" || *meta.RequestedSpec == "None"
+}
 
 // readCondaAboutJSON reads the summary/description from a conda package's
 // about.json file, which exists for all package types (Python, R, C libs, etc.).
