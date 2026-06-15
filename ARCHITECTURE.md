@@ -1,108 +1,159 @@
 # whatsinstalled — Architecture
 
-Package inventory and semantic search CLI/TUI for Linux. Scans installed
-packages across 22 package managers, enriches them with descriptions, embeds
-them with a BERT model, and supports natural-language search.
+`whatsinstalled` is a single-binary Go CLI/TUI that inventories software
+installed across **22 package managers**, enriches each package with a
+description, embeds it with a BERT model, and answers natural-language
+("Ask whatsinstalled") semantic queries over your machine.
+
+The design goal is a **cold search that cannot hang**: scanning, enrichment, and
+embedding all happen up front in an init pipeline, so a query is reduced to a
+single in-memory vector ranking.
+
+---
 
 ## Data Flow
 
+End-to-end pipeline: **Scan → Enrich → Embed → Search → Display**. SQLite is the
+hub every stage reads from and writes back to.
+
 ```mermaid
 flowchart TD
-    subgraph Init["Initialisation Pipeline"]
-        SCAN["SCAN<br/>22 package managers<br/>parallel goroutines<br/>Scan() &rarr; []store.Package"]
-        STORE["STORE<br/>SQLite · WAL mode<br/>~/.whatsinstalled.db"]
-        ENRICH["ENRICHMENT<br/>Local tools + remote APIs<br/>30-day cache (SQLite)"]
-        EMBED["NLP / EMBEDDING<br/>all-MiniLM-L6-v2<br/>384-dim · cybertron"]
+    subgraph init["🛠️ &nbsp;Initialisation pipeline &nbsp;·&nbsp; fullInitWithProgress()"]
+        direction TB
+        SCAN["<b>SCAN</b><br/>22 package managers · parallel goroutines<br/><i>Scan() → []store.Package</i>"]
+        ENRICH["<b>ENRICHMENT</b><br/>local tools + remote registries<br/>30-day SQLite cache"]
+        EMBED["<b>NLP / EMBEDDING</b><br/>all-MiniLM-L6-v2 · 384-dim<br/>cybertron (pure Go)"]
     end
 
-    subgraph Runtime["Runtime Pipeline"]
-        SEARCH["search.Rank()<br/>cosine + keyword boost<br/>Threshold · TopK 50"]
-        TUI["TUI DASHBOARD<br/>Bubble Tea<br/>Tree view · tabs · overlays"]
+    STORE[("<b>STORE</b> · SQLite (WAL)<br/>~/.whatsinstalled.db<br/>packages + enrichment_cache")]
+
+    subgraph runtime["▶️ &nbsp;Runtime"]
+        direction TB
+        SEARCH["<b>search.Rank()</b><br/>cosine similarity + keyword boost<br/>threshold 0.05 · TopK 50"]
+        TUI["<b>TUI DASHBOARD</b> · Bubble Tea<br/>tree view · source tabs · overlays"]
     end
 
-    subgraph Eval["Evaluation"]
-        EVAL["EVAL HARNESS<br/>MRR · Hit@1/3/10<br/>Curated + synthetic queries<br/>Baseline diff"]
-    end
+    EVAL["<b>EVAL HARNESS</b><br/>MRR · Hit@1 / 3 / 10<br/>curated + synthetic · baseline diff"]
 
-    SCAN -->|"Upsert() · PurgeStale()"| STORE
-    STORE -->|"ListWithoutDescriptions()"| ENRICH
+    SCAN   -->|"Upsert() · PurgeStale()"| STORE
+    STORE  -->|"ListWithoutDescriptions()"| ENRICH
     ENRICH -->|"UpdateManyDescriptions()"| STORE
-    STORE -->|"ListWithoutEmbeddings()"| EMBED
-    EMBED -->|"UpdateEmbedding()"| STORE
+    STORE  -->|"ListWithoutEmbeddings()"| EMBED
+    EMBED  -->|"UpdateEmbedding()"| STORE
 
-    STORE -->|"ListWithEmbeddings()"| SEARCH
-    EMBED -->|"encode(query) &rarr; queryVec"| SEARCH
-    SEARCH -->|"Result[] &rarr; display"| TUI
+    STORE  -->|"ListWithEmbeddings()"| SEARCH
+    EMBED  -->|"encode(query) → queryVec"| SEARCH
+    SEARCH -->|"Result[] → display"| TUI
+    SEARCH <-->|"shared search.Rank() · queries + options"| EVAL
 
-    SEARCH <-->|"shared search.Rank()<br/>queries + options"| EVAL
+    classDef scan   fill:#0b3d5c,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px
+    classDef store  fill:#5b3a00,stroke:#f59e0b,color:#fff7ed,stroke-width:2px
+    classDef enrich fill:#0b3d2e,stroke:#34d399,color:#dcfce7,stroke-width:1px
+    classDef embed  fill:#3b1f5e,stroke:#a78bfa,color:#f3e8ff,stroke-width:1px
+    classDef search fill:#0e3a3a,stroke:#2dd4bf,color:#ccfbf1,stroke-width:1px
+    classDef tui    fill:#1e2a5a,stroke:#818cf8,color:#e0e7ff,stroke-width:1px
+    classDef eval   fill:#3a3a3a,stroke:#9ca3af,color:#f3f4f6,stroke-width:1px
+
+    class SCAN scan
+    class STORE store
+    class ENRICH enrich
+    class EMBED embed
+    class SEARCH search
+    class TUI tui
+    class EVAL eval
 ```
+
+> The diagram above is the canonical architecture picture, migrated from the
+> former `*-architecture.excalidraw` source into Mermaid so it lives and
+> versions alongside the code.
+
+---
 
 ## Package Layout
 
+```text
+cmd/whatsinstalled   — binary entrypoint (main.go)
+cmd/enrich           — one-off enrichment backfill helper
+
+internal/cmd         — Cobra commands
+  root.go            — rootCmd, TUI launcher, --db flag
+  subcommands.go     — `whatsinstalled scan`
+  eval.go            — `whatsinstalled eval` + variant selectors
+
+internal/scanner     — one file per package manager (22 in the registry)
+  scanner.go         — Scanner interface: Name, Scan, IsAvailable, Probe
+  discovery.go       — AllScanners registry + DiscoverScanners()
+  apt · snap · npm · pip · conda · brew · cargo · gem · go · pixi · pipx
+  pnpm · yarn · docker · podman · pacman · yay · flatpak · nix · appimage · uv · bin
+
+internal/store       — SQLite persistence
+  store.go           — Package struct, Store, Open, migrate, CRUD, DBPath()
+
+internal/enrich      — description enrichment
+  enrich.go          — Enricher, EnrichPackages, per-source routing
+  local.go           — LocalEnricher: pip show, apt show, brew info, whatis, pacman -Qi
+  remote.go          — RemoteEnricher: PyPI, npm, crates.io, rubygems (throttled)
+  cache.go           — Cache over enrichment_cache table (30-day TTL)
+
+internal/nlp         — BERT embedding + NLP helpers
+  embedder.go        — Embedder, LoadEmbedder, Encode, CosineSimilarity, PackageText
+  search.go          — ExpandQuery (domain keyword sets), KeywordScore
+
+internal/search      — pure ranking (no DB / UI / network)
+  rank.go            — Options, Result, Rank, DefaultOptions
+  eval/eval.go       — Query, Metrics, Report, Regression, Aggregate, Diff
+  eval/queries.json  — curated golden queries
+
+internal/tui         — Bubble Tea dashboard (split by concern — see below)
+internal/pkg         — environment helpers (HomeDir, IsRoot, FileOwner, GetLastUsed)
+internal/version     — const Version = "v1.0.0-beta"
 ```
-cmd/whatsinstalled     — binary entrypoint (main.go)
-cmd/enrich       — one-off enrichment helper
 
-internal/cmd     — Cobra commands (root, scan, eval)
-internal/cmd/root.go         — rootCmd, TUI launcher, --db flag
-internal/cmd/subcommands.go  — whatsinstalled scan
-internal/cmd/eval.go         — whatsinstalled eval + variant selectors
+### TUI module structure
 
-internal/scanner — one file per package manager (22 total)
-scanner.go         — Scanner interface: Name, Scan, IsAvailable, Probe
-discovery.go       — AllScanners registry + DiscoverScanners()
-apt.go             — dpkg-query
-snap.go            — snap list
-npm.go             — npm list --json (global + local node_modules)
-pip.go             — pip list --json (system + venvs)
-conda.go           — conda list --json (per environment)
-bin.go             — os.ReadDir in known dirs + PATH
-brew.go            — brew list --formula
-cargo.go           — ~/.cargo/bin readdir
-gem.go             — gem list --local
-pipx.go            — pipx list --json
-uv.go              — uv tool list
-pnpm.go            — pnpm ls -g --json
-yarn.go            — yarn global list
-go.go              — ~/go/pkg/mod walkdir
-docker.go          — docker images --format=json
-podman.go          — podman images --format=json
-pacman.go          — pacman -Q
-yay.go             — yay -Q
-flatpak.go         — flatpak list --app
-nix.go             — nix-env -q
-appimage.go        — *.AppImage file scan
-pixi.go            — pixi list (global + local manifest)
+The dashboard was split out of a single 1.8k-line file into cohesive units that
+map onto Bubble Tea's `Init` / `Update` / `View` contract.
 
-internal/store     — SQLite persistence
-store.go           — Package struct, Store, Open, migrate, CRUD
+```mermaid
+flowchart LR
+    RUN["app.go · Run()<br/>builds & starts tea.Program"]
 
-internal/enrich    — description enrichment
-enrich.go          — Enricher, EnrichPackages, descMapForSource routing
-local.go           — LocalEnricher: pip show, apt show, brew info, whatis, pacman -Qi
-remote.go          — RemoteEnricher: PyPI, npm, crates.io, rubygems (100ms delay)
-cache.go           — Cache: get/set/batch in enrichment_cache table (30-day TTL)
+    subgraph loop["Bubble Tea loop"]
+        direction TB
+        INIT["Init()"]
+        UPDATE["Update(msg)<br/>routes keys by mode"]
+        VIEW["View()<br/>+ overlay renderers"]
+    end
 
-internal/nlp       — BERT embedding + NLP helpers
-embedder.go        — Embedder, LoadEmbedder, Encode, CosineSimilarity, PackageText
-search.go          — ExpandQuery (10 domain keyword sets), KeywordScore
+    MODEL["model.go<br/>state + message types"]
+    CMDS["commands.go<br/>loadData · fullInitWithProgress<br/>startSearch · runSearch · liveSearch"]
+    PALETTE["palette.go<br/>command palette"]
+    PANELS["panels.go<br/>detail · help · status · About"]
+    TREE["tree.go<br/>tree view · 8 columns"]
+    STYLES["styles.go<br/>7 themes + format helpers"]
 
-internal/search    — Pure ranking (no DB/UI/network)
-rank.go            — Options, Result, Rank, DefaultOptions
-eval/              — IR evaluation harness
-eval/eval.go       — Query, Metrics, Report, Regression, Aggregate, Diff
-eval/queries.json  — Curated golden queries
+    RUN --> INIT
+    INIT -->|tea.Cmd| CMDS
+    UPDATE -->|tea.Cmd| CMDS
+    CMDS -->|tea.Msg| UPDATE
+    UPDATE --> MODEL
+    VIEW --> PANELS
+    VIEW --> TREE
+    VIEW --> PALETTE
+    PANELS --> STYLES
+    TREE --> STYLES
 
-internal/tui       — Bubble Tea dashboard (~1800 lines in dashboard.go)
-dashboard.go       — model, Init, Update, View, loadData, fullInitWithProgress, search
-tree.go            — Custom tree view (7 cols: Name, Version, Src, Location, User, Size, Used)
-styles.go          — 7 themes (TokyoNight, Nord, Dracula, etc.), format helpers
-
-internal/pkg       — Environment helpers
-env.go             — HomeDir, CWD, IsRoot, ShortenPath, FileOwner, GetLastUsed
-
-internal/version   — version.go (const Version = "v1.0.0-beta")
+    classDef f fill:#1e2a5a,stroke:#818cf8,color:#e0e7ff
+    classDef m fill:#0e3a3a,stroke:#2dd4bf,color:#ccfbf1
+    class RUN,INIT,UPDATE,VIEW,MODEL,PALETTE,PANELS,TREE,STYLES f
+    class CMDS m
 ```
+
+All background work (scan, enrich, embed, search) is dispatched as a `tea.Cmd`
+that runs off the UI goroutine and feeds results back as a `tea.Msg`; `Update`
+never blocks.
+
+---
 
 ## Database Schema
 
@@ -120,7 +171,7 @@ CREATE TABLE IF NOT EXISTS packages (
     user            TEXT,
     updated_at      INTEGER,
     last_used       INTEGER,
-    embedding       TEXT          -- JSON float64 array (384-dim)
+    embedding       TEXT          -- JSON float array (384-dim)
 );
 CREATE UNIQUE INDEX idx_pkg ON packages(name, source, location);
 
@@ -133,85 +184,86 @@ CREATE TABLE IF NOT EXISTS enrichment_cache (
 );
 ```
 
-- DB path: `~/.whatsinstalled.db` (override with `WHATSINSTALLED_DB` env var or `--db` flag)
-- WAL mode via `PRAGMA journal_mode=WAL`
+- DB path: `~/.whatsinstalled.db` (override with `WHATSINSTALLED_DB` env var or `--db`)
+- WAL mode via `PRAGMA journal_mode=WAL`; writes are single-writer/sequential.
 
-## Key Store Methods
+### Key store methods
 
 | Method | Purpose |
 |---|---|
-| `Upsert(p Package)` | INSERT … ON CONFLICT(name,source,location) DO UPDATE |
-| `List(source, hideAuto)` | Packages with optional source filter |
-| `ListWithEmbeddings()` | All packages where embedding IS NOT NULL |
-| `ListWithoutEmbeddings()` | Packages where embedding IS NULL |
-| `ListWithoutDescriptions(source)` | Packages with empty description |
-| `Search(query, source, hideAuto)` | name LIKE %query% |
-| `SearchText(query)` | name OR description LIKE %query% |
-| `CountBySource(hideAuto)` | map[string]int + total |
-| `UpdateManyDescriptions(missing)` | Batch update descriptions |
-| `UpdateEmbedding(id, embedding)` | Store JSON vector |
-| `PurgeStale(cutoff)` | Remove packages not in current scan cycle |
+| `Upsert(p Package)` | `INSERT … ON CONFLICT(name,source,location) DO UPDATE` |
+| `List(source, hideAuto)` | packages with optional source filter |
+| `ListWithEmbeddings()` | packages where `embedding IS NOT NULL` |
+| `ListWithoutEmbeddings()` | packages where `embedding IS NULL` |
+| `ListWithoutDescriptions(source)` | packages with empty description |
+| `Search(query, source, hideAuto)` | `name LIKE %query%` |
+| `SearchText(query)` | `name OR description LIKE %query%` |
+| `CountBySource(hideAuto)` | `map[string]int` + total |
+| `UpdateManyDescriptions(missing)` | batch description write |
+| `UpdateEmbedding(id, embedding)` | store JSON vector |
+| `PurgeStale(cutoff)` | drop packages not seen in the current scan cycle |
+
+---
 
 ## Initialisation Pipeline
 
-`fullInitWithProgress()` runs on startup and on `r` rescan. Progress is
-reported via channel callbacks that drive the TUI status bar.
+`fullInitWithProgress()` runs on startup and on `r` (rescan). It streams progress
+over a channel that drives the splash/status UI. If cached data already exists,
+the dashboard renders immediately and the pipeline refreshes in the background.
 
 ### Phase 1 — Scan
 
-- `scanner.DiscoverScanners()` returns only `IsAvailable() && Probe()` scanners
-- Each scanner runs in a goroutine; scan progress is sent via channel
-- After all goroutines complete, results are upserted sequentially
-- `PurgeStale()` removes packages not refreshed in this cycle
+- `scanner.DiscoverScanners()` returns only scanners that are `IsAvailable()` and
+  pass a cheap `Probe()`.
+- Each scanner runs in its own goroutine (cost is subprocess wait, so parallel
+  scans collapse wall-clock to ≈ the slowest one).
+- Results are upserted sequentially (single-writer SQLite); `PurgeStale()` then
+  removes anything not refreshed this cycle.
 
 ### Phase 2 — Enrich
 
-- `ListWithoutDescriptions("")` finds packages with empty descriptions
-- `descMapForSource()` routes each source to the right enricher:
+- `ListWithoutDescriptions("")` finds packages with no description.
+- Each source is routed to the right enricher:
   - **bin**: `whatis` + `dpkg -S` → `apt show`
-  - **apt**: `apt show`
-  - **snap**: `snap info`
-  - **brew**: `brew info --json=v2`
+  - **apt**: `apt show` · **snap**: `snap info` · **brew**: `brew info --json=v2`
   - **pacman/yay**: `pacman -Qi`
   - **pip/pipx/uv**: `pip show` → PyPI API
   - **npm/pnpm/yarn**: `npm info` → npm registry
-  - **cargo**: crates.io API (with User-Agent)
-  - **gem**: rubygems.org API
-  - All others (docker, podman, go, appimage, nix, flatpak): return empty
+  - **cargo**: crates.io · **gem**: rubygems.org
+  - others (docker, podman, go, appimage, nix, flatpak): no description
 - Results are cached in `enrichment_cache` (30-day TTL) and written via
-  `UpdateManyDescriptions()`
+  `UpdateManyDescriptions()`.
 
 ### Phase 3 — Embed
 
-- `ListWithoutEmbeddings()` finds packages needing vectors
-- Each package is converted to text via `PackageText(name, source, desc)`,
-  which adds source context (e.g., "python package", "debian system package
-  manager")
-- Encoded via `all-MiniLM-L6-v2` (384-dimensional float32 vector)
-- Stored as JSON in the `embedding` column via `UpdateEmbedding()`
+- `ListWithoutEmbeddings()` finds packages needing vectors.
+- `PackageText(name, source, desc)` builds the embedding input, adding source
+  context (e.g. "python package", "debian system package manager").
+- Encoded with `all-MiniLM-L6-v2` into a 384-dim vector, stored as JSON in the
+  `embedding` column via `UpdateEmbedding()`.
 
-After these three phases the DB is fully populated and search is ready.
+After these phases the DB is fully populated and search is ready.
+
+---
 
 ## Search Pipeline
 
-1. User presses `?` to open the "Ask whatsinstalled" modal
-2. As user types, `liveSearch()` runs `db.SearchText(query)` for instant
-   substring preview in the modal
-3. User presses Enter → `startSearch()` → `search()` runs in a goroutine:
-   - `nlp.ExpandQuery(query)` — appends domain synonyms if the query contains
-     a known keyword (network, python, web, database, etc.)
-   - `embedder.Encode(ctx, expandedQuery)` → 384-dim query vector
-   - `db.ListWithEmbeddings()` → all packages with pre-computed vectors
+1. `?` opens the **"Ask whatsinstalled"** modal.
+2. While typing, `liveSearch()` runs `db.SearchText(query)` for an instant
+   substring preview inside the modal.
+3. `Enter` → `startSearch()` dispatches `runSearch()` as a `tea.Cmd`:
+   - `nlp.ExpandQuery(query)` appends domain synonyms when the query contains a
+     known keyword (network, python, web, database, …).
+   - `embedder.Encode(ctx, expandedQuery)` → 384-dim query vector.
+   - `db.ListWithEmbeddings()` → all packages with pre-computed vectors.
    - `search.Rank(queryVec, query, pkgs, DefaultOptions)`:
-     - `Score = CosineSimilarity(queryVec, pkg.Embedding)
-       + KeywordWeight × KeywordScore(query, pkg)`
-     - Sort descending by score
-     - Filter by threshold (0.05); fallback to top 10 if none pass
-     - Cap at TopK (50)
-4. Results are returned to the TUI via a `semanticSearchResult` message
-5. The TUI switches to the Results tab (index 0) and renders the ranked list
+     - `Score = CosineSimilarity(queryVec, pkg.Embedding) + KeywordWeight × KeywordScore(query, pkg)`
+     - sort descending, filter by threshold (0.05), cap at TopK (50).
+4. Results return to the TUI as a `semanticSearchResult` message (tagged with a
+   `searchVersion` so a superseded search is discarded).
+5. The TUI switches to the **Results** tab and renders the ranked list.
 
-### Search Variants
+### Search variants
 
 The ranking formula is configurable through `search.Options`:
 
@@ -223,120 +275,119 @@ The ranking formula is configurable through `search.Options`:
 | keyword-2x | 2.0 | 0.05 | true |
 | thr-0 | 1.0 | 0.0 | true |
 
-### Graceful Degradation
+### Graceful degradation
 
-- No embedder cached → search falls back to `SearchText()` (substring match)
-- No embeddings in DB (fresh after scan) → `search()` falls back to
-  `SearchText()` while embedding runs in background
+- No embedder cached → search falls back to `SearchText()` (substring match).
+- No embeddings yet (fresh DB) → `runSearch()` falls back to `SearchText()`
+  while embedding completes in the background.
+
+---
 
 ## Evaluation Harness
 
-`whatsinstalled eval` runs the same `search.Rank()` function used by the TUI,
-computing standard IR metrics:
+`whatsinstalled eval` runs the **same** `search.Rank()` used by the TUI, so the
+metrics reflect real ranking behaviour:
 
 - **MRR** (Mean Reciprocal Rank)
 - **Hit@1, Hit@3, Hit@10**
 
-Queries come from two sources:
-- **Curated golden set** (`internal/search/eval/queries.json`) — hand-written
-  queries with expected results
-- **Synthetic queries** (`--synthetic N`) — generated known-item queries from
-  random packages in the DB
+Queries come from a curated golden set (`internal/search/eval/queries.json`) and
+optional synthetic known-item queries (`--synthetic N`).
 
-Usage:
 ```bash
 whatsinstalled eval                           # default variant, curated + 30 synthetic
 whatsinstalled eval --synthetic 50            # 50 synthetic queries
 whatsinstalled eval --variant semantic-only   # specific variant
-whatsinstalled eval --variant all             # all variants
+whatsinstalled eval --variant all             # every variant
 whatsinstalled eval --out results.json        # save results
-whatsinstalled eval --baseline results.json   # diff against baseline (regression detection)
+whatsinstalled eval --baseline results.json   # diff against a baseline
 ```
 
-Currently `semantic-only` (KeywordWeight=0) achieves MRR 0.640, outperforming
-`default` (0.527). The keyword boost currently hurts relevance.
+> Current finding: `semantic-only` (KeywordWeight = 0) reaches MRR ≈ 0.64,
+> beating `default` (≈ 0.53) — i.e. the keyword boost presently *hurts*
+> relevance. Tune via `search.DefaultOptions()`, then re-measure with `eval`.
+
+---
 
 ## TUI Structure
 
+```text
+┌─ whatsinstalled ── apt:90 │ snap:3 │ npm:14 ─────────── v1.0.0-beta ─┐
+│══════════════════════════════════════════════════════════════════│
+│  Name      Version Src  Location   User   Size  Added  Used        │
+│  ▾ system                    [45]                                   │
+│    nginx   1.24.0  apt  system     system 4.2M  12d    3d          │
+│    core20  202604  snap system     system  -    30d    -           │
+│  ▸ base                      [23]                                   │
+│══════════════════════════════════════════════════════════════════│
+│  [All] [Apt] [Snap] [Npm] [Pip] [Conda] [Bin]        /filter       │
+│══════════════════════════════════════════════════════════════════│
+│  ▾ Description                      │ ▾ Keys                         │
+│  nginx — web server                 │ :  Command palette             │
+│                                     │ ?  Ask whatsinstalled          │
+│══════════════════════════════════════════════════════════════════│
+│ nginx (apt)  │  whatsinstalled — tokyo-night                       │
+└──────────────────────────────────────────────────────────────────┘
 ```
-+-- whatsinstalled -- apt:90 | snap:3 | npm:14 ------ v1.0.0-beta --+
-|==============================================================|
-:  Name      Version Src  Location     User  Size    Used       :
-:  > system                   [45]                             :
-:    nginx   1.24.0  apt  system      system 4.2M  12d        :
-:    core20  202604  snap system      system  -     -          :
-:  v base                      [23]                             :
-|==============================================================|
-|  [All] [Apt] [Snap] [Npm] [Pip] [Conda] [Bin]  /filter      |
-|==============================================================|
-|  v Description                         | v Keys              |
-:  nginx - web server                    | :  Command palette   :
-:                                        | ?  Ask whatsinstalled     :
-:                                        | a  About            :
-:                                        | q  Quit             :
-|==============================================================|
-| nginx (apt)  |  whatsinstalled - tokyo-night                        |
-+--------------------------------------------------------------+
-```
+
+The tree leaf row has **8 columns**: Name · Version · Source · Location · User ·
+Size · Added · Used.
 
 ### Keybindings
 
 | Key | Action |
 |---|---|
-| `j` / `k` / `↑` / `↓` | Navigate tree |
-| `→` / `l` / `Space` | Expand group |
-| `←` / `h` | Collapse group |
-| `Tab` / `Shift+Tab` | Switch source tabs |
-| `/` | Filter (substring, current tab) |
+| `j` / `k` / `↑` / `↓` | navigate tree |
+| `→` / `l` / `Space` | expand group |
+| `←` / `h` | collapse group |
+| `Tab` / `Shift+Tab` | switch source tabs |
+| `/` | filter (substring, current tab) |
 | `?` | "Ask whatsinstalled" semantic search |
-| `Enter` / `d` | Detail overlay |
-| `r` | Rescan all |
-| `a` | About modal |
-| `t` | Theme picker (7 themes) |
-| `:` | Command palette |
-| `D` | Toggle auto-installed deps |
-| `Esc` | Clear / close / cancel |
-| `q` / `Ctrl+C` | Quit |
+| `Enter` / `d` | detail overlay |
+| `r` | rescan all |
+| `a` | about modal |
+| `t` | theme picker (7 themes) |
+| `:` | command palette |
+| `D` | toggle auto-installed deps |
+| `Esc` | clear / close / cancel |
+| `q` / `Ctrl+C` | quit |
 
 ### Themes
 
-`t` opens a theme picker with 7 themes: TokyoNight (default), Palenight,
-Dracula, Nord, Gruvbox, Catppuccin, Monokai. Selection is persisted across
-restarts.
+`t` opens a picker with 7 themes — TokyoNight (default), Palenight, Dracula,
+Nord, Gruvbox, Catppuccin, Monokai — persisted across restarts.
+
+---
 
 ## Commands
 
 | Command | Purpose |
 |---|---|
-| `whatsinstalled` | Launch TUI dashboard |
+| `whatsinstalled` | launch the TUI dashboard |
 | `whatsinstalled scan` | CLI rescan, print per-source counts |
-| `whatsinstalled eval` | Search ranking evaluation (MRR/Hit@k) |
-| `whatsinstalled eval --synthetic N` | Add N synthetic queries |
-| `whatsinstalled eval --variant X` | Select ranking variant |
-| `whatsinstalled eval --baseline file.json` | Diff against baseline |
-| `whatsinstalled --version` | Print version |
-| `whatsinstalled --db PATH` | Override DB path |
+| `whatsinstalled eval` | search-ranking evaluation (MRR / Hit@k) |
+| `whatsinstalled eval --synthetic N` | add N synthetic queries |
+| `whatsinstalled eval --variant X` | select a ranking variant |
+| `whatsinstalled eval --baseline file.json` | diff against a baseline |
+| `whatsinstalled --version` | print version |
+| `whatsinstalled --db PATH` | override the DB path |
 
 ## Build / Test
 
 ```bash
-go build ./...                       # compile all packages
+go build ./...                                   # compile all packages
 go build -o whatsinstalled ./cmd/whatsinstalled  # build the binary
-go test ./...                        # full suite
-go vet ./...                         # vet
-./whatsinstalled                           # launch TUI
-./whatsinstalled scan                      # CLI rescan
-./whatsinstalled eval --synthetic 30       # evaluate search ranking
-./whatsinstalled --version                 # print version
+go test ./...                                    # full suite
+go vet ./...                                     # vet
 ```
 
 ## Runtime Facts
 
-- DB: `~/.whatsinstalled.db` (NOT `~/.whatsinstalled/*.db`)
-- Embedding model: `~/.whatsinstalled/models/sentence-transformers` (~177MB, 384-dim)
-- First run downloads the model; `nlp.LoadEmbedder()` returns an error if
-  absent and search degrades to substring fallback
-- Init pipeline (`fullInitWithProgress`) scans → enriches → embeds, so search
-  is just one query-encode + in-memory scoring (fast, cannot hang)
-- Enrichment and embedding are pre-computation only; they do NOT run on the
-  search hot path
+- DB: `~/.whatsinstalled.db` (a file, **not** a `~/.whatsinstalled/` directory).
+- Embedding model: `~/.whatsinstalled/models/sentence-transformers` (~177 MB,
+  384-dim). First run downloads it; `nlp.LoadEmbedder()` errors if absent and
+  search degrades to the substring fallback.
+- The init pipeline (`fullInitWithProgress`) does scan → enrich → embed, so a
+  search is just one query-encode plus in-memory scoring — fast, and unable to
+  hang. Enrichment and embedding are **pre-computation only**; they never run on
+  the search hot path.
