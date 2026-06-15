@@ -267,7 +267,7 @@ execution surface to inherit if such a feature is ever re-introduced.
 | **Dependency detection (conda/pip)** | Reads local JSON files via `json.NewDecoder` — safe. Pip `Required-by` parsed from existing `pip show` bulk output — no new subprocess. |
 | **Gem `list --details` enrichment** | One new bulk subprocess call (`gem` from `PATH`). Covered by §2. |
 | **Tree rendering hardened** | Full-width padding and dep-marker color scoping fix ANSI-styling edge cases (§3). |
-| **Platform-specific env files** | `env_unix.go` / `env_access_*.go` isolate syscall code. No new surface — same syscall patterns as before. |
+| **Platform-specific env files** | `env_unix.go` holds shared Unix logic (`FileOwner`, `GetLastUsed`); `env_linux.go` / `env_darwin.go` provide the per-platform `atime` shim. No new surface — same syscall patterns as before. |
 
 ---
 
