@@ -90,6 +90,9 @@ func (s BinScanner) Scan() ([]store.Package, error) {
 	// Post-process: enrich descriptions
 	s.enrichDescriptions(pkgs)
 
+	// Cross-reference with shell history for reliable last-used timestamps
+	s.enrichLastUsed(pkgs)
+
 	return pkgs, nil
 }
 
@@ -141,6 +144,22 @@ func (s BinScanner) enrichDescriptions(pkgs []store.Package) {
 		}
 	}
 
+}
+
+// enrichLastUsed updates LastUsed for bin packages using shell history, which
+// gives reliable command-invocation timestamps unlike filesystem atime.
+func (s BinScanner) enrichLastUsed(pkgs []store.Package) {
+	cmdTimes := pkg.ShellCommandTimes()
+	if len(cmdTimes) == 0 {
+		return
+	}
+	for i := range pkgs {
+		if t, ok := cmdTimes[pkgs[i].Name]; ok {
+			if pkgs[i].LastUsed == nil || t.After(*pkgs[i].LastUsed) {
+				pkgs[i].LastUsed = &t
+			}
+		}
+	}
 }
 
 // whatisBatch runs whatis for multiple names and returns name -> description.

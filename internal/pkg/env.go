@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -127,4 +129,76 @@ func GetLastUsed(path string) *time.Time {
 		t = info.ModTime()
 	}
 	return &t
+}
+
+// ShellCommandTimes parses shell history files and returns a map of executable
+// names to the most recent observed invocation time. Supports zsh extended
+// history (": <epoch>:<duration>;<command>") and bash history (with and without
+// timestamps). Returns an empty map if no history files can be read.
+func ShellCommandTimes() map[string]time.Time {
+	times := make(map[string]time.Time)
+	home := HomeDir()
+	if home == "" {
+		return times
+	}
+
+	for _, hist := range []string{".zsh_history", ".bash_history"} {
+		path := filepath.Join(home, hist)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		parseShellHistory(string(data), times)
+	}
+	return times
+}
+
+// parseShellHistory parses a shell history file into the times map.
+func parseShellHistory(raw string, times map[string]time.Time) {
+	lines := strings.Split(raw, "\n")
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var epoch int64
+		var cmd string
+
+		// Zsh extended format: ": <epoch>:<duration>;<command>"
+		if strings.HasPrefix(line, ": ") {
+			rest := strings.TrimPrefix(line, ": ")
+			if idx := strings.IndexByte(rest, ':'); idx > 0 {
+				if e, err := strconv.ParseInt(rest[:idx], 10, 64); err == nil && e > 0 {
+					epoch = e
+					if semi := strings.IndexByte(rest, ';'); semi > 0 {
+						cmd = strings.TrimSpace(rest[semi+1:])
+					}
+				}
+			}
+		}
+		// Bash timestamp line: "#<epoch>" followed by command on next line
+		if strings.HasPrefix(line, "#") && epoch == 0 && len(line) > 1 {
+			if e, err := strconv.ParseInt(line[1:], 10, 64); err == nil && e > 0 {
+				if i+1 < len(lines) {
+					epoch = e
+					cmd = strings.TrimSpace(lines[i+1])
+				}
+			}
+		}
+
+		if cmd == "" {
+			continue
+		}
+
+		// Extract the executable: first word, strip path prefixes
+		firstWord := strings.Fields(cmd)[0]
+		exe := filepath.Base(firstWord) // /usr/bin/ls → ls
+
+		if epoch > 0 {
+			t := time.Unix(epoch, 0)
+			if prev, ok := times[exe]; !ok || t.After(prev) {
+				times[exe] = t
+			}
+		}
+	}
 }

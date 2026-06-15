@@ -229,10 +229,12 @@ func (tv *treeView) renderLeafNode(n *treeNode, selected bool, width int) string
 
 	indent := "  "
 	name := p.Name
+	depMarker := ""
 	if p.AutoInstalled {
-		indent = "    \u21b3 "
+		indent = "    "
+		depMarker = lipgloss.NewStyle().Foreground(accent).Render("\u21b3") + " "
 	}
-	availWidth := width - lipgloss.Width(indent)
+	availWidth := width - lipgloss.Width(indent) - lipgloss.Width(depMarker)
 	cols := calcColumnWidths(availWidth)
 
 	name = truncate(name, cols.name)
@@ -245,8 +247,8 @@ func (tv *treeView) renderLeafNode(n *treeNode, selected bool, width int) string
 	added := truncate(formatRelative(p.AddedAt), cols.added)
 	lastUsed := formatRelative(p.LastUsed)
 
-	line := fmt.Sprintf("%s%-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s",
-		indent,
+	line := fmt.Sprintf("%s%s%-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s",
+		indent, depMarker,
 		cols.name, name,
 		cols.ver, ver,
 		cols.src, src,
@@ -370,7 +372,7 @@ func renderTreeHeader(width int) string {
 		cols.user, "User",
 		cols.size, "Size",
 		cols.added, "Added",
-		cols.used, "Used")
+		cols.used, "Access")
 	pad := width - lipgloss.Width(line)
 	if pad > 0 {
 		line += strings.Repeat(" ", pad)
