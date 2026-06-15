@@ -1,5 +1,5 @@
 # eval harness output
 eval-report.json
 
-# build artifact
-installr
+# build artifact (anchored to repo root so it doesn't match cmd/whatsinstalled/)
+/whatsinstalled
