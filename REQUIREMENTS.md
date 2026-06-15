@@ -107,7 +107,7 @@ Every package must record the user who installed it:
 ```
 
 ### 6.2 Components
-- **Title bar** (top strip): App name + per-source package counts. While a background scan/refresh runs, a `⟳ updating…` indicator shows in the right corner (the full-screen splash only appears on first run, when the cache is empty).
+- **Title bar** (top strip): App name + per-source package counts. While a background scan/refresh runs, an animated spinner indicator shows in the right corner (the full-screen splash only appears on first run, when the cache is empty).
 - **Tree panel** (main area): Hierarchical tree grouped by `location`. Group nodes show `▸`/`▾` expand/collapse indicator and child count `[N]`. Leaf nodes show package columns.
 - **Column header**: `Name Version Src Location User Size Added Used`. `Size`/`Added`
   are populated only where the path resolves to the package's own files (file

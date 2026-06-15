@@ -483,3 +483,11 @@
 - **No X/Y progress**: Added `enrichTotal`/`embedTotal` to model. Handler stores totals from phase headers and formats enrichment/embedding as "Enriching gem... 23/385 packages" and "Computing embeddings... 2622/5182 (50%)".
 - **Default message**: `"Checking installed packages..."` → `"Initializing..."`.
 - **Files**: `internal/tui/model.go`, `internal/tui/update.go`
+
+### Session: Animated Spinner (2026-06-16)
+
+- **Replaced all hardcoded "⟳"** with a braille spinner (⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏) that animates via a self-repeating `spinTick()` → `spinnerTickMsg` loop at ~80ms (`tea.Tick`).
+- **Ticker lifecycle**: `Init()` starts the ticker. The handler re-arms it only when `m.scanning || m.searching || m.bgUpdating`. When all three are false the ticker stops — no background CPU work.
+- **7 locations replaced**: splash `Updating packages`, corner `updating…`, tree `Searching...`, search modal `Searching...`, and status-bar scanning/searching.
+- **`spinnerGlyph(frame)`** in `model.go` maps frame modulo 10 to the glyph.
+- **Files**: `internal/tui/model.go`, `internal/tui/update.go`, `internal/tui/view.go`, `internal/tui/panels.go`
