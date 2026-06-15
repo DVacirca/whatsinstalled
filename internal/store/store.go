@@ -141,7 +141,7 @@ func (s *Store) List(sourceFilter string, hideAuto bool) ([]Package, error) {
 	}
 	defer rows.Close()
 
-	return scanRows(rows)
+	return scanRows(rows, false)
 }
 
 // Search returns packages matching a name substring within an optional source filter.
@@ -153,7 +153,7 @@ func (s *Store) Search(query, sourceFilter string, hideAuto bool) ([]Package, er
 	}
 	defer rows.Close()
 
-	return scanRows(rows)
+	return scanRows(rows, false)
 }
 
 // whereClause builds an optional WHERE filter shared by List/Search/CountBySource.
@@ -188,7 +188,7 @@ func (s *Store) SearchText(query string) ([]Package, error) {
 		return nil, fmt.Errorf("search packages: %w", err)
 	}
 	defer rows.Close()
-	return scanRows(rows)
+	return scanRows(rows, false)
 }
 
 // Delete removes a package by name, source, and location.
@@ -251,7 +251,7 @@ func (s *Store) ListWithoutEmbeddings() ([]Package, error) {
 		return nil, fmt.Errorf("list without embeddings: %w", err)
 	}
 	defer rows.Close()
-	return scanRows(rows)
+	return scanRows(rows, false)
 }
 
 // ListWithEmbeddings returns all packages with their embeddings.
@@ -261,42 +261,7 @@ func (s *Store) ListWithEmbeddings() ([]Package, error) {
 		return nil, fmt.Errorf("list with embeddings: %w", err)
 	}
 	defer rows.Close()
-
-	var pkgs []Package
-	for rows.Next() {
-		var p Package
-		var size sql.NullInt64
-		var auto int
-		var updated int64
-		var user sql.NullString
-		var lastUsed sql.NullInt64
-		var addedAt sql.NullInt64
-		var embedding sql.NullString
-		if err := rows.Scan(&p.ID, &p.Name, &p.Version, &p.Source, &p.Location, &size, &p.Description, &p.InstalledAt, &auto, &user, &updated, &lastUsed, &addedAt, &embedding); err != nil {
-			return nil, err
-		}
-		if size.Valid {
-			p.SizeBytes = &size.Int64
-		}
-		if user.Valid {
-			p.User = user.String
-		}
-		if lastUsed.Valid {
-			t := time.UnixMilli(lastUsed.Int64)
-			p.LastUsed = &t
-		}
-		if addedAt.Valid {
-			t := time.UnixMilli(addedAt.Int64)
-			p.AddedAt = &t
-		}
-		p.AutoInstalled = auto != 0
-		p.UpdatedAt = time.UnixMilli(updated)
-		if embedding.Valid {
-			p.Embedding = embedding.String
-		}
-		pkgs = append(pkgs, p)
-	}
-	return pkgs, rows.Err()
+	return scanRows(rows, true)
 }
 
 // ListWithoutDescriptions returns packages that have no description.
@@ -312,7 +277,7 @@ func (s *Store) ListWithoutDescriptions(sourceFilter string) ([]Package, error) 
 		return nil, fmt.Errorf("list without descriptions: %w", err)
 	}
 	defer rows.Close()
-	return scanRows(rows)
+	return scanRows(rows, false)
 }
 
 // UpdateDescription updates the description for a single package.
@@ -358,7 +323,7 @@ func (s *Store) GetEnrichmentCache() *sql.DB {
 	return s.db
 }
 
-func scanRows(rows *sql.Rows) ([]Package, error) {
+func scanRows(rows *sql.Rows, withEmbedding bool) ([]Package, error) {
 	var pkgs []Package
 	for rows.Next() {
 		var p Package
@@ -368,7 +333,14 @@ func scanRows(rows *sql.Rows) ([]Package, error) {
 		var user sql.NullString
 		var lastUsed sql.NullInt64
 		var addedAt sql.NullInt64
-		if err := rows.Scan(&p.ID, &p.Name, &p.Version, &p.Source, &p.Location, &size, &p.Description, &p.InstalledAt, &auto, &user, &updated, &lastUsed, &addedAt); err != nil {
+		var embedding sql.NullString
+		var err error
+		if withEmbedding {
+			err = rows.Scan(&p.ID, &p.Name, &p.Version, &p.Source, &p.Location, &size, &p.Description, &p.InstalledAt, &auto, &user, &updated, &lastUsed, &addedAt, &embedding)
+		} else {
+			err = rows.Scan(&p.ID, &p.Name, &p.Version, &p.Source, &p.Location, &size, &p.Description, &p.InstalledAt, &auto, &user, &updated, &lastUsed, &addedAt)
+		}
+		if err != nil {
 			return nil, err
 		}
 		if size.Valid {
@@ -387,6 +359,9 @@ func scanRows(rows *sql.Rows) ([]Package, error) {
 		}
 		p.AutoInstalled = auto != 0
 		p.UpdatedAt = time.UnixMilli(updated)
+		if embedding.Valid {
+			p.Embedding = embedding.String
+		}
 		pkgs = append(pkgs, p)
 	}
 	return pkgs, rows.Err()
