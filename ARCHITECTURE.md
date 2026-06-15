@@ -18,22 +18,22 @@ hub every stage reads from and writes back to.
 
 ```mermaid
 flowchart TD
-    subgraph init["🛠️ &nbsp;Initialisation pipeline &nbsp;·&nbsp; fullInitWithProgress()"]
+    subgraph init["🛠️ Initialisation pipeline · fullInitWithProgress()"]
         direction TB
-        SCAN["<b>SCAN</b><br/>22 package managers · parallel goroutines<br/><i>Scan() → []store.Package</i>"]
-        ENRICH["<b>ENRICHMENT</b><br/>local tools + remote registries<br/>30-day SQLite cache"]
-        EMBED["<b>NLP / EMBEDDING</b><br/>all-MiniLM-L6-v2 · 384-dim<br/>cybertron (pure Go)"]
+        SCAN["SCAN<br/>22 package managers · parallel goroutines<br/>Scan() → []store.Package"]
+        ENRICH["ENRICHMENT<br/>local tools + remote registries<br/>30-day SQLite cache"]
+        EMBED["NLP / EMBEDDING<br/>all-MiniLM-L6-v2 · 384-dim<br/>cybertron (pure Go)"]
     end
 
-    STORE[("<b>STORE</b> · SQLite (WAL)<br/>~/.whatsinstalled.db<br/>packages + enrichment_cache")]
+    STORE[("STORE · SQLite (WAL)<br/>~/.whatsinstalled.db<br/>packages + enrichment_cache")]
 
-    subgraph runtime["▶️ &nbsp;Runtime"]
+    subgraph runtime["▶️ Runtime"]
         direction TB
-        SEARCH["<b>search.Rank()</b><br/>cosine similarity + keyword boost<br/>threshold 0.05 · TopK 50"]
-        TUI["<b>TUI DASHBOARD</b> · Bubble Tea<br/>tree view · source tabs · overlays"]
+        SEARCH["search.Rank()<br/>cosine similarity + keyword boost<br/>threshold 0.05 · TopK 50"]
+        TUI["TUI DASHBOARD · Bubble Tea<br/>tree view · source tabs · overlays"]
     end
 
-    EVAL["<b>EVAL HARNESS</b><br/>MRR · Hit@1 / 3 / 10<br/>curated + synthetic · baseline diff"]
+    EVAL["EVAL HARNESS<br/>MRR · Hit@1 / 3 / 10<br/>curated + synthetic · baseline diff"]
 
     SCAN   -->|"Upsert() · PurgeStale()"| STORE
     STORE  -->|"ListWithoutDescriptions()"| ENRICH
