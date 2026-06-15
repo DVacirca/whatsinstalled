@@ -340,13 +340,21 @@ func calcColumnWidths(availWidth int) colWidths {
 		c.loc += contentWidth - total
 	}
 
-	// If we have extra space (target or above), give it to name and location.
+	// If we have extra space (target or above), grow name modestly (capped) and
+	// give the bulk to location, which holds the longest values (paths). Splitting
+	// 50/50 made name balloon on wide terminals.
 	if contentWidth >= targetContent {
 		extra := contentWidth - targetContent
-		nameExtra := extra / 2
-		locExtra := extra - nameExtra
+		const maxName = 28
+		nameExtra := extra / 4
+		if c.name+nameExtra > maxName {
+			nameExtra = maxName - c.name
+		}
+		if nameExtra < 0 {
+			nameExtra = 0
+		}
 		c.name += nameExtra
-		c.loc += locExtra
+		c.loc += extra - nameExtra
 	}
 
 	return c

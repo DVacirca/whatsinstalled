@@ -51,7 +51,7 @@ var paletteCommands = []commandDef{
 		m.initStep = "scan"
 		return func() tea.Msg { return m.fullInitWithProgress() }
 	}},
-	{"Deps", "Show/hide auto-installed dependency packages", "D", false, func(m *model) tea.Cmd {
+	{"Deps", "Show/hide apt packages auto-installed as dependencies (apt only)", "D", false, func(m *model) tea.Cmd {
 		m.hideAuto = !m.hideAuto
 		return m.loadData
 	}},
