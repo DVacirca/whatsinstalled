@@ -22,7 +22,7 @@ var paletteCommands = []commandDef{
 	{"Filter", "Filter packages by name", "/", false, func(m *model) tea.Cmd { return m.enterFilterMode() }},
 	{"Search", "Semantic search with LLM (experimental)", "?", false, func(m *model) tea.Cmd { return m.enterSearchMode() }},
 	{"Rescan", "Rescan all packages", "r", false, func(m *model) tea.Cmd { return m.triggerRescan() }},
-	{"Deps", "Show/hide apt packages auto-installed as dependencies (apt only)", "D", false, func(m *model) tea.Cmd {
+	{"Deps", "Show/hide auto-installed dependencies (apt + pip)", "D", false, func(m *model) tea.Cmd {
 		m.hideAuto = !m.hideAuto
 		return m.loadData
 	}},

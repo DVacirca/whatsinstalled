@@ -31,7 +31,7 @@ type model struct {
 	availableLabels  []string
 
 	mode     string // "" | "detail" | "search" | "theme-picker" | "about"
-	hideAuto bool   // hide apt packages auto-installed as dependencies
+	hideAuto bool   // hide apt+ pip packages auto-installed as dependencies
 
 	// semantic search
 	semanticQuery   string
@@ -125,7 +125,7 @@ func NewModel(s *store.Store) *model {
 		store:            s,
 		tree:             newTreeView(),
 		counts:           make(map[string]int),
-		hideAuto:         true, // dependency packages are noise by default
+		hideAuto:         false,
 		scanning:         true,
 		initLogs:         []string{"Initializing..."},
 		availableSources: []string{""},
