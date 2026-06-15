@@ -32,7 +32,8 @@
 - **yarn** (v1): parse `yarn global list` — `info "name@version" has binaries:` lines; split on the LAST `@` to support `@scope/pkg`.
 - **podman**: copy of the docker scanner (`podman images --format {{json .}}`).
 - **appimage**: always `IsAvailable`; scans `~/Applications`, `~/Downloads`, `~/.local/bin`, `/opt` (depth 1) for `*.AppImage`. `splitAppImageName` strips the suffix and best-effort extracts a trailing `-1.2.3` version (regex `[-_]v?\d[\w.]*$`).
-- New scanners need no TUI changes: register in `scanner.AllScanners` (registry order = tab order) and `buildTabs` renders a tab only when `counts[name] > 0`. Text-parsing scanners have `parseX` helpers unit-tested in `parse_test.go`.
+- New scanners need no TUI changes: register in `scanner.AllScanners` and `buildTabs` renders a tab only when `counts[name] > 0`. Text-parsing scanners have `parseX` helpers unit-tested in `parse_test.go`.
+  - **Tab order** is alphabetical (after the "All" tab) — NOT the registry order. `buildTabs` collects sources with `counts > 0` and `sort.Strings` them. Tests in `internal/tui/tabs_test.go`.
 - **auto-installed filter**: `store.List/Search/CountBySource` take a `hideAuto bool` (shared `whereClause` helper adds `auto_installed = 0`). TUI model `hideAuto` defaults true; key `a` and palette "Deps" toggle it, then reload via `loadData`. Keeps tab counts consistent with rows.
 
 ### User Tracking
@@ -93,6 +94,9 @@
 - **pip packages**: `pip show` (batch, ~7s for 93 packages) → PyPI API fallback.
 - **npm packages**: `npm info --json` (local, ~1s for 14 packages) → npm registry fallback.
 - **Remote APIs**: PyPI (`pypi.org/pypi/{name}/json`) and npm registry (`registry.npmjs.org/{name}`). 100ms delay between requests to be polite. 30-day cache TTL.
+- **All sources now route** via `Enricher.descMapForSource` (enrich.go), not just the original 6. Mappings: `pipx`/`uv` → PyPI (pip path); `pnpm`/`yarn` → npm path; `cargo` → crates.io; `gem` → rubygems.org; `brew` → `brew info --json=v2`; `pacman`/`yay` → `pacman -Qi`. Sources with no meaningful registry description (docker, podman, appimage, nix, go) fall through to an empty map.
+- **crates.io requires a `User-Agent` header** or it 403s — `RemoteEnricher.fetchJSON` always sets one. Registry base URLs (`cratesURL`, `rubygemsURL`) are struct fields so tests can point them at httptest.
+- Brew/pacman parsing is split into pure `parseBrewJSON`/`parsePacmanInfo` so it's unit-testable without the binaries installed (`local_test.go`, `remote_test.go`).
 
 ### Enrichment Cache
 - **SQLite table**: `enrichment_cache(name, source, description, fetched_at)` with 30-day TTL.
@@ -431,3 +435,23 @@
 - **Phase 2 (LLM-judge) deferred, designed-in**: judge cost scales with top-K shown, NOT corpus size → ~$0.12/50-query run on Haiku, cached `(query,pkg)` re-runs ≈ pennies. `Result` keeps per-component scores so nDCG drops in later. Not built; no anthropic-sdk-go dependency yet.
 - **KEY FINDING (data-driven, ran on real DB, 5321 embedded pkgs)**: the keyword boost **hurts** ranking. `semantic-only` (KeywordWeight=0) MRR **0.640** vs `default` (KeywordWeight=1) **0.527**; `keyword-2x` collapses to 0.274. Also `no-expand` == `default` — `ExpandQuery` never fires unless the query literally contains a domain keyword (network/python/web/…), which real queries rarely do. `thr-0` == `default` (threshold only filters the tail). **Next tuning pass: lower/remove `KeywordWeight`; reconsider `ExpandQuery`.** "tools for editing video" is the worst curated query (RR 0.200, ffmpeg at rank 5 — text editors crowd it out).
 - **Files**: `internal/search/rank.go`, `internal/search/eval/{eval.go,queries.json}`, `internal/cmd/eval.go`, `internal/tui/dashboard.go`
+
+### Session: Enrichment for all sources + alphabetical tabs (2026-06-15)
+
+#### Tab ordering
+- `buildTabs` now sorts source tabs alphabetically (after the "All" tab) instead of using `scanner.AllScanners` registry order. Tests updated in `internal/tui/tabs_test.go`.
+
+#### Description enrichment gap (the big one)
+- **Root cause of "many packages have no descriptions"**: `enrichSource` only handled 6 of 22 sources (bin, pip, npm, apt, snap, conda). The other 16 had NO enrichment path → guaranteed blank.
+- **Fix**: replaced the switch with data-driven `Enricher.descMapForSource` routing every source. New registries: crates.io (cargo), rubygems.org (gem); new local commands: `brew info --json=v2`, `pacman -Qi`. pipx/uv reuse the PyPI path, pnpm/yarn reuse npm.
+- Also fixed a latent double-count in progress reporting (npm/snap/conda fired the callback twice per package).
+- **crates.io 403s without a `User-Agent`** — `fetchJSON` always sets one.
+
+#### pixi finding
+- The system has the pixi binary but ZERO environments: `~/.pixi/envs` empty, `~/.pixi/manifests/pixi-global.toml` is 0 bytes, `pixi global list` → none, no `pixi.toml` anywhere under `~`. The PixiScanner is correct; it returns nothing because there is nothing installed. Not a bug.
+
+#### Embedding staleness gap (known, not yet fixed)
+- Embeddings are computed once when `embedding IS NULL` (`store.go` / `dashboard.go` Phase 3) and NEVER recomputed. If a description/metadata changes after embedding, the vector goes stale. Must null+recompute on change. Captured in `plans/metadata-enrichment-pipeline.md`.
+
+#### Plans for the metadata model
+- Two plan docs added under `plans/`: `specialized-metadata-model.md` (tiny distilled generative model, teacher→student) and `metadata-enrichment-pipeline.md` (Go integration via a `MetadataGenerator` interface, init-time generation, embed-feed). Ask query path stays pure embedding retrieval; the generative model runs only at init.

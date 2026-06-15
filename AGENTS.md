@@ -35,7 +35,7 @@ cmd/enrich          one-off enrichment helper
 internal/cmd        cobra commands (root, scan, eval)
 internal/scanner    one file per package manager; AllScanners registry + DiscoverScanners
 internal/store      SQLite (modernc.org/sqlite), WAL mode; Package model, embeddings, enrichment_cache
-internal/enrich     description enrichment (local tools first, then PyPI/npm APIs; cached, timeouts)
+internal/enrich     per-source description enrichment: local tools then registries (PyPI, npm, crates.io, rubygems, brew, pacman); cached, timeouts
 internal/nlp        embedder (all-MiniLM-L6-v2 via cybertron), cosine, query expansion, keyword score
 internal/search     pure ranking: search.Rank — shared by the TUI and the eval harness
 internal/search/eval IR metrics (MRR/Hit@k), synthetic queries, queries.json golden set, report/diff
@@ -67,8 +67,9 @@ internal/tui        Bubble Tea dashboard, tree view, styles, themes
   Make one commit per logical change. Never push without being asked.
 - Tests: deterministic, behaviour-focused; real objects over mocks. Metric/ranking
   logic is unit-tested without the model; model-dependent tests skip if uncached.
-- Beware Go map iteration order — never derive UI order (e.g. tabs) from a map; use
-  the `scanner.AllScanners` registry order. (This caused a real tab-reorder bug.)
+- Beware Go map iteration order — never derive UI order (e.g. tabs) directly from a
+  map. `buildTabs` sorts source tabs alphabetically (after "All") for a stable
+  order. (Deriving order from map iteration caused a real tab-reorder bug.)
 - Log non-obvious discoveries/gotchas to MEMORY.md immediately, not at session end.
 
 ## Key docs
