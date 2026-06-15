@@ -51,7 +51,7 @@ var paletteCommands = []commandDef{
 		m.initStep = "scan"
 		return func() tea.Msg { return m.fullInitWithProgress() }
 	}},
-	{"Deps", "Show/hide auto-installed dependency packages", "a", false, func(m *model) tea.Cmd {
+	{"Deps", "Show/hide auto-installed dependency packages", "D", false, func(m *model) tea.Cmd {
 		m.hideAuto = !m.hideAuto
 		return m.loadData
 	}},
@@ -61,7 +61,7 @@ var paletteCommands = []commandDef{
 		m.themePickerIndex = currentThemeIndex()
 		return nil
 	}},
-	{"About", "About installr", "i", false, func(m *model) tea.Cmd {
+	{"About", "About installr", "a", false, func(m *model) tea.Cmd {
 		m.mode = "about"
 		return nil
 	}},
@@ -424,7 +424,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.mode == "about" {
 			switch msg.String() {
-			case "esc", "q", "ctrl+c", "enter", "i":
+			case "esc", "q", "ctrl+c", "enter", "a":
 				m.mode = ""
 			}
 			return m, tea.Batch(cmds...)
@@ -498,7 +498,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "/":
 			m.filtering = true
 			m.filter = ""
-		case "a":
+		case "D":
 			m.hideAuto = !m.hideAuto
 			cmds = append(cmds, m.loadData)
 		case "up", "k":
@@ -531,7 +531,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "t":
 			m.mode = "theme-picker"
 			m.themePickerIndex = currentThemeIndex()
-		case "i":
+		case "a":
 			m.mode = "about"
 		case "r":
 			m.scanning = true
@@ -930,7 +930,7 @@ func (m *model) View() string {
 
 	// ── About overlay ──
 	if m.mode == "about" {
-		modalWidth := min(54, m.width-4)
+		modalWidth := min(62, m.width-4)
 		modal := modalBorderStyle.Width(modalWidth).Render(aboutModalContent(modalWidth))
 		result = lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
 	}
@@ -1223,14 +1223,6 @@ func (m *model) renderMetaPanel(w, h int) string {
 	return strings.Join(lines, "\n")
 }
 
-// autoToggleLabel describes what pressing 'a' will do given the current state.
-func autoToggleLabel(hideAuto bool) string {
-	if hideAuto {
-		return "Show deps"
-	}
-	return "Hide deps"
-}
-
 // About modal text. Kept as package vars so tests can assert on them.
 const (
 	aboutAuthor = "by Dante Vacirca + Claude"
@@ -1240,15 +1232,20 @@ const (
 		"answer \"what do I actually have, and what is it for?\""
 )
 
-// aboutModalContent renders the inner content of the About modal at the given
-// width (excluding the surrounding border).
+// aboutModalContent renders the inner content of the About modal. modalWidth is
+// the width passed to modalBorderStyle; its Padding(1,2) leaves modalWidth-4 for
+// text, so the blurb must wrap to that to avoid the box re-wrapping it raggedly.
 func aboutModalContent(modalWidth int) string {
+	inner := modalWidth - 4
+	if inner < 1 {
+		inner = 1
+	}
 	lines := []string{
 		modalTitleStyle.Render("installr " + version.Version),
 		"",
 		lipgloss.NewStyle().Foreground(fgDim).Render(aboutAuthor),
 		"",
-		lipgloss.NewStyle().Foreground(fg).Width(modalWidth - 2).Render(aboutBlurb),
+		lipgloss.NewStyle().Foreground(fg).Width(inner).Render(aboutBlurb),
 		"",
 		lipgloss.NewStyle().Foreground(fgDim).Render("Esc to close"),
 	}
@@ -1256,19 +1253,14 @@ func aboutModalContent(modalWidth int) string {
 }
 
 func (m *model) renderHelpPanel(w, h int) string {
+	// Two-column layout fills row-major: even indices land in the left column,
+	// odd indices in the right. Left = actions (':' then Ask first), right =
+	// navigation. Capped at 8 (4 rows); everything else lives in the palette (':').
 	keys := []struct{ k, v string }{
-		{"↑↓ / jk", "Navigate"},
-		{"←→ / hl", "Expand"},
-		{"Tab", "Switch source"},
-		{"/", "Filter"},
-		{"a", autoToggleLabel(m.hideAuto)},
-		{"?", "Ask (experimental)"},
-		{":", "Command"},
-		{"t", "Theme"},
-		{"i", "About"},
-		{"d", "Details"},
-		{"r", "Rescan"},
-		{"q", "Quit"},
+		{":", "Command"}, {"↑↓ / jk", "Navigate"},
+		{"?", "Ask LLM"}, {"←→ / hl", "Expand"},
+		{"a", "About"}, {"Tab", "Switch tab"},
+		{"q", "Quit"}, {"/", "Filter"},
 	}
 
 	lines := []string{bottomTitleStyle.Render(truncate("Keys", w-1))}
