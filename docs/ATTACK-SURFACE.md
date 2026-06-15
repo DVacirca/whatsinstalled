@@ -10,6 +10,13 @@ question is therefore not "who can reach it" but "what *untrusted data and
 binaries* does it touch while inventorying a machine, and what happens when those
 are hostile."
 
+**Changes since last analysis (2026-06-16):** +278 packages discovered (depth-2
+venv/npm scanning, uv project detection). Shell history parsing added for
+last-used tracking. Per-package sizes via `PathSize` on pip/conda/npm dirs.
+Dependency detection extended to pip (`Required-by`) and conda
+(`requested_spec`). Gem enrichment via `gem list --details`. Tree rendering
+hardened with full-width padding.
+
 ---
 
 ## Trust model
@@ -30,9 +37,12 @@ displays.
 **Out of scope / not a surface (by design):**
 
 - No inbound network — no ports, no RPC, no auth to bypass.
-- **SQL is fully parameterized** (`?` placeholders throughout `internal/store/store.go`) — no SQL injection.
-- The live scan/enrich path builds subprocesses from **argument slices, not a shell**, so there is no classic shell-string injection on that path.
-- Registry calls use the default `http.Client` with **TLS verification on** and a 10 s timeout (`internal/enrich/remote.go`).
+- **SQL is fully parameterized** (`?` placeholders throughout
+  `internal/store/store.go`) — no SQL injection.
+- The live scan/enrich path builds subprocesses from **argument slices, not a
+  shell**, so there is no classic shell-string injection on that path.
+- Registry calls use the default `http.Client` with **TLS verification on** and a
+  10 s timeout (`internal/enrich/remote.go`).
 
 ```
 Attack-surface diagram — see git history for Mermaid source.
@@ -46,12 +56,13 @@ Untrusted inputs → whatsinstalled process → Sinks (terminal, DB).
 | # | Surface | Vector | Worst-case impact | Severity |
 |---|---|---|---|---|
 | 1 | Executing discovered binaries | fake `.venv/bin/pip` in a scanned dir or CWD | local code execution as the user | **High — fixed** |
-| 2 | `PATH` hijacking | malicious `npm`/`docker`/`apt`/… earlier on `PATH` | local code execution as the user | **Medium** |
-| 3 | Terminal escape injection | hostile package name/description rendered in the TUI | UI spoofing, terminal-emulator exploits | **Medium** |
-| 4 | Registry requests | unescaped package name in URL; unbounded response body | request manipulation, memory DoS | **Low–Medium** |
+| 2 | `PATH` hijacking | malicious tool earlier on `PATH` | local code execution as the user | **Medium** |
+| 3 | Terminal escape injection | hostile package name/description rendered in TUI | UI spoofing, terminal-emulator exploits | **Medium** |
+| 4 | Registry requests | unescaped package name in URL; unbounded response | request manipulation, memory DoS | **Low–Medium** |
 | 5 | Model supply chain | unpinned model download / writable model cache | loading a tampered model | **Low–Medium** |
-| 6 | Local files & DB | `--db`/`WHATSINSTALLED_DB` arbitrary path; file perms; TOCTOU | data tampering / disclosure | **Low** |
-| 7 | Dead privileged/shell exec | unwired `sh -c` and `sudo` install/uninstall code | latent injection if re-wired | **Removed** |
+| 6 | Local files & DB | `--db`/`WHATSINSTALLED_DB` arbitrary path; TOCTOU | data tampering / disclosure | **Low** |
+| 7 | Shell history poisoning | crafted history entries in `~/.zsh_history` | incorrect timestamps, parser confusion | **Low** |
+| 8 | Dead privileged/shell exec | unwired `sh -c` and `sudo` install/uninstall code | latent injection if re-wired | **Removed** |
 
 ---
 
@@ -72,12 +83,18 @@ it a one-liner: `cd ./malicious-repo && whatsinstalled`.
 
 **The fix** (`internal/scanner/pip.go`):
 
-- `scanVenvMetadata()` reads each venv's `lib/python3*/site-packages/*.dist-info/METADATA`
-  (and `*.egg-info/PKG-INFO`) directly — name, version, summary — and **never
-  executes anything from the venv**.
+- `scanVenvMetadata()` reads each venv's
+  `lib/python3*/site-packages/*.dist-info/METADATA` (and `*.egg-info/PKG-INFO`)
+  directly — name, version, summary — and **never executes anything from the
+  venv**.
 - The **current-directory** virtualenv scan was removed entirely.
 - A regression test (`pip_test.go`) plants a hostile `bin/pip` in a fake venv and
   asserts it is never run.
+- **Depth-2 scanning** (new): pip and npm now also scan `~/projects/myapp/.venv`
+  and `~/projects/myapp/package.json` (one directory deeper). The same metadata-
+  reading safety applies — no venv binaries are executed at depth 2 either.
+- **UV project detection** (new): `uv.lock` presence is checked with `os.Stat`
+  only; the safe `scanVenvMetadata()` path is used regardless of source routing.
 
 The **system** pip is still invoked from `PATH` (`scanWithPip("pip", "system")`),
 which is the expected trusted-tool case and is covered by §2 rather than here.
@@ -96,8 +113,12 @@ Every scanner and enricher invokes its tool by **bare name** — `docker`, `npm`
 directory earlier on `PATH` that an attacker can write to lets them shadow one of
 these tools and run code the next time whatsinstalled scans or enriches.
 
+**New surface — `brew --prefix`** (`internal/scanner/brew.go:32`): the brew
+scanner now runs `brew --prefix` on every scan to determine the Homebrew
+installation path. This adds one more `PATH`-resolved invocation per scan.
+
 Impact rises sharply if whatsinstalled is ever run as **root** (the unwired
-`snap` install/uninstall helpers even call `sudo` — see §7).
+`snap` install/uninstall helpers even call `sudo` — see §8).
 
 **Mitigations**
 - Resolve tools to absolute paths from a sanitized `PATH` (drop `.` and
@@ -112,6 +133,13 @@ to the terminal by the TUI (`internal/tui/tree.go` leaf rows,
 `internal/tui/panels.go` detail/description) with no control-character
 sanitization. `truncate()` in `internal/tui/styles.go` slices by **byte**, which
 can also split multibyte runes or escape sequences.
+
+**New exposure — `↳` marker** (`internal/tui/tree.go:233-235`): an accent-colored
+ANSI sequence is now injected into the rendered output for auto-installed
+packages. The marker itself (`\u21b3`) is safe, but the lipgloss style wrapping
+introduces additional ANSI codes adjacent to untrusted package names —
+mismatched SGR state from a hostile description could bleed into the marker's
+styling region.
 
 A package whose description embeds ANSI/OSC escape sequences could therefore
 spoof dashboard content, rewrite other lines, set the window title, or — against
@@ -172,14 +200,46 @@ still corrupt results or exploit loader bugs.
   world-readable.
 - **TOCTOU** — pip/conda scanning does `os.Stat(pipBin)` then `exec` later; the
   binary could be swapped between check and use.
+- **`PathSize` recursion** (new) — `filepath.WalkDir` now recurses into
+  per-package directories for pip, conda, and npm packages
+  (`internal/pkg/env.go:73-95`). Unbounded depth; a package directory with deep
+  nesting or symlink loops could cause excessive CPU/fs time. `WalkDir` does not
+  follow symlinks, so loops are not a concern.
+- **Shell history reads** (new) — `ShellCommandTimes()` (`internal/pkg/env.go`)
+  reads `~/.zsh_history` and `~/.bash_history` in full memory. On a system with
+  very large history files (tens of MB), this is a memory consumption vector.
+  The files are under the user's control.
 - Directory walks (`pixi`, `go`, `bin`, `appimage`) follow into user/project
   trees; symlinks are not specifically constrained.
 
 **Mitigations**
 - Create the DB `0600`; validate/normalize the `--db` path.
 - Open-then-`fstat` instead of stat-then-exec.
+- Consider a max file size for shell history reads.
 
-## 7. Dead privileged / shell-exec code — Removed
+## 7. Shell history parsing — Low
+
+**New surface.** `ShellCommandTimes()` parses `~/.zsh_history` and
+`~/.bash_history` to extract command timestamps. The parser handles zsh extended
+format (`: <epoch>:<dur>;<cmd>`) and bash timestamp lines (`#<epoch>`).
+
+**Risks:**
+- **Poisoned content**: an attacker with write access to the history file can
+  inject fake timestamps or crafted command names that appear in the "Access"
+  column. Impact: incorrect last-used data only — no execution, no code path
+  leads back to executing the history content. The `Access` column is
+  informational; it does not gate any operation.
+- **Parser robustness**: the format parser uses simple string splits and index
+  operations (`strings.IndexByte`, `strings.Fields`). No regex, no CGo, no
+  external library. Crafted input can cause incorrect timestamps at worst — the
+  `strconv.ParseInt` guard drops non-numeric epochs silently.
+- **Memory**: reads the entire file with `os.ReadFile`. Very large history files
+  are a local memory-DoS vector (see §6).
+
+**Verdict:** Low severity. The parser is defensive, the data is write-only to the
+display, and history file modification requires local user-level access.
+
+## 8. Dead privileged / shell-exec code — Removed
 
 The per-source `Install` / `Uninstall` / `InstallCmd` / `UninstallCmd` methods
 were dead (the TUI is read-only — they had no live caller) yet still carried
@@ -195,18 +255,34 @@ execution surface to inherit if such a feature is ever re-introduced.
 
 ---
 
+## What changed since last analysis
+
+| Change | Impact |
+|--------|--------|
+| **Depth-2 venv/npm scanning** | More directories touched; same safety guards apply (metadata-only for venvs). No new execution risk. |
+| **UV project detection** | `os.Stat("uv.lock")` only — no execution. Source routing is purely a string label change. |
+| **Shell history parsing** | New low-severity surface (see §7). Read-only, defensive parser, no execution path back to history content. |
+| **Per-package `PathSize`** | `filepath.WalkDir` on pip/conda/npm dirs. `WalkDir` does not follow symlinks. Deep nesting is a resource concern (see §6). |
+| **`brew --prefix` invocation** | One more `PATH`-resolved subprocess per scan. Covered by existing §2. |
+| **Dependency detection (conda/pip)** | Reads local JSON files via `json.NewDecoder` — safe. Pip `Required-by` parsed from existing `pip show` bulk output — no new subprocess. |
+| **Gem `list --details` enrichment** | One new bulk subprocess call (`gem` from `PATH`). Covered by §2. |
+| **Tree rendering hardened** | Full-width padding and dep-marker color scoping fix ANSI-styling edge cases (§3). |
+| **Platform-specific env files** | `env_unix.go` / `env_access_*.go` isolate syscall code. No new surface — same syscall patterns as before. |
+
+---
+
 ## Hardening priorities
 
-1. **Stop executing binaries from untrusted/CWD paths** (§1) — biggest lever.
-   Done for pip (reads `*.dist-info` metadata; CWD scan removed); apply the same
-   treatment to conda if warranted.
-2. **Sanitize terminal output** of all package-derived strings (§3).
-3. **Resolve tools to trusted absolute paths / sanitize `PATH`** (§2) and document
+1. **Sanitize terminal output** of all package-derived strings (§3) — highest
+   bang for buck among unaddressed items.
+2. **Resolve tools to trusted absolute paths / sanitize `PATH`** (§2) and document
    running unprivileged.
-4. **Escape registry URLs and bound response bodies** (§4).
-5. **Pin and verify the model** and lock down its cache directory (§5).
-6. **Tighten DB permissions** (§6). *(The dead install/uninstall exec code in §7
-   has been removed.)*
+3. **Escape registry URLs and bound response bodies** (§4).
+4. **Pin and verify the model** and lock down its cache directory (§5).
+5. **Tighten DB permissions** and add history-file size cap (§6).
+6. *(The depth-2 scan and shell history additions are low-risk and do not need
+   immediate remediation beyond what's noted above.)*
+7. *(The dead install/uninstall exec code in §8 has been removed.)*
 
 ## What is already solid
 
@@ -216,3 +292,7 @@ execution surface to inherit if such a feature is ever re-introduced.
 - TLS-verified, time-bounded registry calls.
 - Goroutine panics during init are recovered, so malformed tool output degrades
   gracefully rather than crashing the app.
+- Pip virtualenv scanning is metadata-only — no venv binaries are executed at
+  any scan depth.
+- Shell history parser is defensive (string splits only, numeric guards) and
+  read-only — parsed data never feeds back into execution.
