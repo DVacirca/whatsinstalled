@@ -95,14 +95,34 @@ func PackageText(name, source, description string) string {
 		sourceContext = "debian system package manager"
 	case "snap":
 		sourceContext = "ubuntu snap system package"
-	case "npm":
+	case "npm", "pnpm", "yarn":
 		sourceContext = "node javascript package"
-	case "pip":
+	case "pip", "pipx", "uv":
 		sourceContext = "python package"
 	case "conda":
 		sourceContext = "conda python environment package"
+	case "pixi":
+		sourceContext = "pixi conda environment package"
 	case "bin":
 		sourceContext = "user binary tool"
+	case "appimage":
+		sourceContext = "portable linux application image"
+	case "brew":
+		sourceContext = "homebrew mac/linux formula"
+	case "cargo":
+		sourceContext = "rust crate"
+	case "gem":
+		sourceContext = "ruby gem"
+	case "go":
+		sourceContext = "go module"
+	case "docker", "podman":
+		sourceContext = "container image"
+	case "pacman", "yay":
+		sourceContext = "arch linux package"
+	case "flatpak":
+		sourceContext = "flatpak sandboxed application"
+	case "nix":
+		sourceContext = "nix functional package"
 	default:
 		sourceContext = "package"
 	}
