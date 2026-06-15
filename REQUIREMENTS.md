@@ -140,9 +140,9 @@ Every package must record the user who installed it:
 Press `?` to open the centered "Ask whatsinstalled" modal and type a query:
 - As you type, an instant **substring preview** (case-insensitive, name or
   description) is shown for immediate feedback.
-- `Enter` runs **semantic search** — embedding cosine similarity + keyword boost
-  over all packages — and shows the ranked hits in the **Results** tab. `Esc`
-  cancels and clears.
+- `Enter` runs **semantic search** — embedding cosine similarity (keyword boost
+  disabled by default; eval shows it hurts MRR) — over all packages and shows the
+  ranked hits in the **Results** tab. `Esc` cancels and clears.
 - Descriptions + embeddings are pre-computed at startup and cached, so search is
   one query-encode + in-memory scoring (fast, cannot hang). If the model or
   embeddings are unavailable, it falls back to the substring matches.

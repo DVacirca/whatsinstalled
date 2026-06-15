@@ -29,7 +29,7 @@ flowchart TD
 
     subgraph runtime["▶️ Runtime"]
         direction TB
-        SEARCH["search.Rank()<br/>cosine similarity + keyword boost<br/>threshold 0.05 · TopK 50"]
+        SEARCH["search.Rank()<br/>cosine similarity (keyword boost 0)<br/>threshold 0.05 · TopK 50"]
         TUI["TUI DASHBOARD · Bubble Tea<br/>tree view · source tabs · overlays"]
     end
 
