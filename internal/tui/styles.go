@@ -321,7 +321,8 @@ func applyTheme(t Theme) {
 
 	bodySelectedStyle = lipgloss.NewStyle().
 		Bold(true).
-		Reverse(true)
+		Foreground(t.Primary).
+		Background(accent)
 }
 
 func init() {

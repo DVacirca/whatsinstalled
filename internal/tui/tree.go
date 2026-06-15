@@ -232,7 +232,7 @@ func (tv *treeView) renderLeafNode(n *treeNode, selected bool, width int) string
 	depMarker := ""
 	if p.AutoInstalled {
 		indent = "    "
-		depMarker = lipgloss.NewStyle().Foreground(accent).Render("\u21b3") + " "
+		depMarker = "\u21b3 "
 	}
 	availWidth := width - lipgloss.Width(indent) - lipgloss.Width(depMarker)
 	cols := calcColumnWidths(availWidth)
@@ -264,6 +264,11 @@ func (tv *treeView) renderLeafNode(n *treeNode, selected bool, width int) string
 	}
 	if selected {
 		return bodySelectedStyle.Render(line)
+	}
+	// Color the dep marker only on unselected rows so it doesn't
+	// override the selection highlight.
+	if p.AutoInstalled {
+		line = strings.Replace(line, "\u21b3", lipgloss.NewStyle().Foreground(accent).Render("\u21b3"), 1)
 	}
 	return bodyCellStyle.Render(line)
 }

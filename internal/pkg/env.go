@@ -1,13 +1,11 @@
 package pkg
 
 import (
-	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -54,24 +52,6 @@ func CurrentUser() string {
 	return u.Username
 }
 
-// FileOwner returns the user name that owns the given path.
-// Falls back to CurrentUser() on error.
-func FileOwner(path string) string {
-	info, err := os.Stat(path)
-	if err != nil {
-		return CurrentUser()
-	}
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok {
-		return CurrentUser()
-	}
-	u, err := user.LookupId(fmt.Sprintf("%d", stat.Uid))
-	if err != nil {
-		return CurrentUser()
-	}
-	return u.Username
-}
-
 // GetModTime returns the modification time of path, or nil if it can't be
 // stat'd. Unlike access time, mtime is not suppressed by noatime/relatime mounts,
 // so it is a reliable "installed/last updated" signal.
@@ -110,25 +90,6 @@ func PathSize(path string) *int64 {
 		return nil
 	})
 	return &total
-}
-
-// GetLastUsed returns the last access time for the given path.
-// Falls back to modification time if access time is unavailable.
-func GetLastUsed(path string) *time.Time {
-	info, err := os.Stat(path)
-	if err != nil {
-		return nil
-	}
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok {
-		t := info.ModTime()
-		return &t
-	}
-	t := time.Unix(stat.Atim.Sec, stat.Atim.Nsec)
-	if t.IsZero() || t.Before(time.Unix(1, 0)) {
-		t = info.ModTime()
-	}
-	return &t
 }
 
 // ShellCommandTimes parses shell history files and returns a map of executable
