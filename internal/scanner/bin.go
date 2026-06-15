@@ -71,9 +71,14 @@ func (s BinScanner) Scan() ([]store.Package, error) {
 				owner = pkg.CurrentUser()
 			}
 
+			source := "bin"
+			if strings.Contains(dir, ".nvm") {
+				source = "npm"
+			}
+
 			p := store.Package{
 				Name:      name,
-				Source:    "bin",
+				Source:    source,
 				Location:  dir,
 				UpdatedAt: time.Now(),
 				User:      owner,

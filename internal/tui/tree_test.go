@@ -7,7 +7,7 @@ import (
 
 func TestRenderTreeHeaderHasAllColumns(t *testing.T) {
 	hdr := renderTreeHeader(160)
-	for _, col := range []string{"Name", "Version", "Src", "Location", "User", "Size", "Added", "Used"} {
+	for _, col := range []string{"Name", "Version", "Src", "Location", "User", "Size", "Added", "Access"} {
 		if !strings.Contains(hdr, col) {
 			t.Fatalf("header missing %q column:\n%s", col, hdr)
 		}

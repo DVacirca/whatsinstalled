@@ -150,7 +150,7 @@ func (m *model) buildTabs() {
 
 	for _, src := range names {
 		sources = append(sources, src)
-		labels = append(labels, fmt.Sprintf("%s (%d)", capitalise(src), m.counts[src]))
+		labels = append(labels, fmt.Sprintf("%s (%d)", sourceLabel(src), m.counts[src]))
 	}
 
 	m.availableSources = sources
@@ -167,6 +167,16 @@ func capitalise(s string) string {
 		r[0] -= 'a' - 'A'
 	}
 	return string(r)
+}
+
+// sourceLabel returns the display name for a source key.
+func sourceLabel(src string) string {
+	switch src {
+	case "npm":
+		return "Node"
+	default:
+		return capitalise(src)
+	}
 }
 
 // visibleTabSources returns the source keys for the currently shown tabs,
