@@ -170,8 +170,8 @@ func (s PipScanner) scanWithPip(pipBin, location string) ([]store.Package, error
 		return nil, fmt.Errorf("parse pip list: %w", err)
 	}
 
-	// Fetch descriptions in one bulk pip show call
-	descMap := s.pipShowDescriptions(pipBin, raw)
+	// Fetch descriptions and dependency info in one bulk pip show call
+	showResult := s.pipShowDescriptions(pipBin, raw)
 
 	owner := "system"
 	if location != "system" {
@@ -179,14 +179,16 @@ func (s PipScanner) scanWithPip(pipBin, location string) ([]store.Package, error
 	}
 	var pkgs []store.Package
 	for _, r := range raw {
+		info := showResult[r.Name]
 		p := store.Package{
-			Name:        r.Name,
-			Version:     r.Version,
-			Source:      "pip",
-			Location:    location,
-			UpdatedAt:   time.Now(),
-			User:        owner,
-			Description: descMap[r.Name],
+			Name:          r.Name,
+			Version:       r.Version,
+			Source:        "pip",
+			Location:      location,
+			UpdatedAt:     time.Now(),
+			User:          owner,
+			Description:   info.Desc,
+			AutoInstalled: info.IsDependency,
 		}
 		// Determine package directory for last-used
 		var pkgDir string
@@ -217,14 +219,20 @@ func (s PipScanner) scanWithPip(pipBin, location string) ([]store.Package, error
 	return pkgs, nil
 }
 
-// pipShowDescriptions runs pip show for all packages and extracts Summary fields.
+// pipShowResult holds the description and dependency status of a pip package.
+type pipShowResult struct {
+	Desc          string
+	IsDependency  bool
+}
+
+// pipShowDescriptions runs pip show for all packages and extracts summary and dependency info.
 func (s PipScanner) pipShowDescriptions(pipBin string, raw []struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
-}) map[string]string {
-	descMap := make(map[string]string)
+}) map[string]pipShowResult {
+	result := make(map[string]pipShowResult)
 	if len(raw) == 0 {
-		return descMap
+		return result
 	}
 
 	names := make([]string, len(raw))
@@ -238,28 +246,39 @@ func (s PipScanner) pipShowDescriptions(pipBin string, raw []struct {
 	cmd := exec.CommandContext(ctx, pipBin, args...)
 	out, err := cmd.Output()
 	if err != nil {
-		return descMap
+		return result
 	}
 
 	var currentName, currentDesc string
+	currentIsDep := false
 	scanner := bufio.NewScanner(bytes.NewReader(out))
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "Name: ") {
-			if currentName != "" && currentDesc != "" {
-				descMap[currentName] = currentDesc
+			if currentName != "" {
+				r := result[currentName]
+				r.Desc = currentDesc
+				r.IsDependency = currentIsDep
+				result[currentName] = r
 			}
 			currentName = strings.TrimSpace(strings.TrimPrefix(line, "Name: "))
 			currentDesc = ""
+			currentIsDep = false
 		} else if strings.HasPrefix(line, "Summary: ") {
 			currentDesc = strings.TrimSpace(strings.TrimPrefix(line, "Summary: "))
+		} else if strings.HasPrefix(line, "Required-by: ") {
+			requiredBy := strings.TrimSpace(strings.TrimPrefix(line, "Required-by: "))
+			currentIsDep = requiredBy != "" && requiredBy != "N/A"
 		}
 	}
-	if currentName != "" && currentDesc != "" {
-		descMap[currentName] = currentDesc
+	if currentName != "" {
+		r := result[currentName]
+		r.Desc = currentDesc
+		r.IsDependency = currentIsDep
+		result[currentName] = r
 	}
 
-	return descMap
+	return result
 }
 
 var _ Scanner = PipScanner{}
