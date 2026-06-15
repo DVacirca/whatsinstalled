@@ -279,7 +279,7 @@ func calcColumnWidths(availWidth int) colWidths {
 		minUsed  = 3
 	)
 	minContent := minName + minVer + minSrc + minLoc + minUser + minSize + minAdded + minUsed
-	target := colWidths{14, 8, 5, 12, 6, 6, 6, 6}
+	target := colWidths{14, 40, 5, 10, 6, 12, 6, 6}
 	targetContent := target.name + target.ver + target.src + target.loc + target.user + target.size + target.added + target.used
 
 	contentWidth := availWidth - spaces

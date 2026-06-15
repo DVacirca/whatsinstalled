@@ -78,14 +78,6 @@ func (s CondaScanner) scanEnv(envPath string) ([]store.Package, error) {
 		return nil, fmt.Errorf("parse conda list: %w", err)
 	}
 
-	// Determine location label
-	location := envPath
-	if envPath == filepath.Join(pkg.HomeDir(), "miniconda3") {
-		location = "base"
-	} else {
-		location = filepath.Base(envPath)
-	}
-
 	// Get owner of the env directory
 	owner := pkg.FileOwner(envPath)
 
@@ -107,7 +99,7 @@ func (s CondaScanner) scanEnv(envPath string) ([]store.Package, error) {
 			Name:      r.Name,
 			Version:   r.Version,
 			Source:    "conda",
-			Location:  location,
+			Location:  envPath,
 			UpdatedAt: time.Now(),
 			User:      owner,
 		}
