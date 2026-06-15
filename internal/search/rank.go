@@ -18,9 +18,12 @@ type Options struct {
 	TopK          int     // cap on returned results (0 = unlimited)
 }
 
-// DefaultOptions mirrors the original inline ranking in the TUI.
+// DefaultOptions returns the production ranking configuration.
+// KeywordWeight is zero because the eval harness shows the keyword boost
+// hurts MRR (0.527 vs 0.640 semantic-only). Keep the mechanism wired so
+// the harness can continue to measure variants.
 func DefaultOptions() Options {
-	return Options{KeywordWeight: 1.0, Threshold: 0.05, TopK: 50}
+	return Options{KeywordWeight: 0.0, Threshold: 0.05, TopK: 50}
 }
 
 // Result is one scored package with its score broken into components so the
