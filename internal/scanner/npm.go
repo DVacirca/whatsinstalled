@@ -42,7 +42,7 @@ func (s NpmScanner) Scan() ([]store.Package, error) {
 		pkgs = append(pkgs, global...)
 	}
 
-	// Local envs: find package.json in ~/* depth 1
+	// Local envs: find package.json in ~/* depth 1-2
 	home := pkg.HomeDir()
 	if home != "" {
 		entries, err := os.ReadDir(home)
@@ -56,6 +56,21 @@ func (s NpmScanner) Scan() ([]store.Package, error) {
 					local, err := s.scanLocation(path, path, false)
 					if err == nil {
 						pkgs = append(pkgs, local...)
+					}
+				}
+				// Depth 2: ~/projects/myapp/package.json
+				if subEntries, err := os.ReadDir(path); err == nil {
+					for _, sub := range subEntries {
+						if !sub.IsDir() {
+							continue
+						}
+						subPath := filepath.Join(path, sub.Name())
+						if _, err := os.Stat(filepath.Join(subPath, "package.json")); err == nil {
+							local, err := s.scanLocation(subPath, subPath, false)
+							if err == nil {
+								pkgs = append(pkgs, local...)
+							}
+						}
 					}
 				}
 			}

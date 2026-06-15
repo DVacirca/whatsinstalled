@@ -35,7 +35,7 @@ func (s PipScanner) Scan() ([]store.Package, error) {
 		pkgs = append(pkgs, global...)
 	}
 
-	// Local virtualenvs under ~/* (depth 1). These directories may be
+	// Local virtualenvs under ~/* (depth 1-2). These directories may be
 	// attacker-controlled (cloned repos, unpacked archives), so we read each
 	// venv's installed-package inventory from its on-disk metadata and never
 	// execute a `pip` binary found inside them — doing so would be arbitrary
@@ -51,6 +51,18 @@ func (s PipScanner) Scan() ([]store.Package, error) {
 				path := filepath.Join(home, entry.Name())
 				for _, venvName := range []string{".venv", "venv", "env"} {
 					pkgs = append(pkgs, s.scanVenvMetadata(filepath.Join(path, venvName), path)...)
+				}
+				// Depth 2: ~/projects/myapp/.venv
+				if subEntries, err := os.ReadDir(path); err == nil {
+					for _, sub := range subEntries {
+						if !sub.IsDir() {
+							continue
+						}
+						subPath := filepath.Join(path, sub.Name())
+						for _, venvName := range []string{".venv", "venv", "env"} {
+							pkgs = append(pkgs, s.scanVenvMetadata(filepath.Join(subPath, venvName), subPath)...)
+						}
+					}
 				}
 			}
 		}
