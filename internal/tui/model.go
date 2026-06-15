@@ -61,6 +61,7 @@ type model struct {
 	scanCount    int                  // packages found by the current scanner
 	enrichTotal  int                  // total packages to enrich (set by phase 2 header)
 	embedTotal   int                  // total packages to embed (set by phase 3 header)
+	spinnerFrame int                  // braille spinner animation frame
 	scanErr      error
 
 	err error
@@ -99,6 +100,24 @@ type scanProgressMsg struct {
 
 // searchTimeoutMsg fires if a search has not completed within the deadline.
 type searchTimeoutMsg struct{}
+
+// spinnerTickMsg is a self-perpetuating tick that animates the braille spinner.
+type spinnerTickMsg struct{}
+
+// spinnerFrames are braille characters that cycle to suggest activity.
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+// spinnerGlyph returns the current spinner frame.
+func spinnerGlyph(frame int) string {
+	return spinnerFrames[frame%len(spinnerFrames)]
+}
+
+// spinTick returns a tea.Cmd that fires spinnerTickMsg after ~80ms.
+func spinTick() tea.Cmd {
+	return tea.Tick(80*time.Millisecond, func(t time.Time) tea.Msg {
+		return spinnerTickMsg{}
+	})
+}
 
 // NewModel returns a dashboard model bound to the given store.
 func NewModel(s *store.Store) *model {

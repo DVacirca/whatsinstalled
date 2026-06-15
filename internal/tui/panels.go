@@ -146,14 +146,15 @@ func (m *model) renderHelpPanel(w, h int) string {
 // screen, summarising the current activity and selection.
 func (m *model) renderStatusBar() string {
 	var parts []string
+	sg := spinnerGlyph(m.spinnerFrame)
 	if m.searching {
-		parts = append(parts, "⟳ searching...")
+		parts = append(parts, sg+" searching...")
 	}
 	if m.scanning {
 		if m.scanSource != "" {
-			parts = append(parts, fmt.Sprintf("⟳ scanning %s... %d", m.scanSource, m.scanCount))
+			parts = append(parts, fmt.Sprintf(sg+" scanning %s... %d", m.scanSource, m.scanCount))
 		} else {
-			parts = append(parts, "⟳ scanning...")
+			parts = append(parts, sg+" scanning...")
 		}
 	}
 	if m.scanErr != nil {

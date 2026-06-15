@@ -22,7 +22,7 @@ func (m *model) View() string {
 		var splashLines []string
 		splashLines = append(splashLines, modalTitleStyle.Render("whatsinstalled"))
 		splashLines = append(splashLines, "")
-		splashLines = append(splashLines, lipgloss.NewStyle().Foreground(fgBright).Bold(true).Render("⟳  Updating packages"))
+		splashLines = append(splashLines, lipgloss.NewStyle().Foreground(fgBright).Bold(true).Render(spinnerGlyph(m.spinnerFrame)+"  Updating packages"))
 		splashLines = append(splashLines, "")
 		logsToShow := m.initLogs
 		if len(logsToShow) == 0 {
@@ -73,7 +73,7 @@ func (m *model) View() string {
 	// Right corner: version, with the background-refresh indicator to its left.
 	right := lipgloss.NewStyle().Foreground(fgDim).Render(version.Version)
 	if m.bgUpdating {
-		indicator := lipgloss.NewStyle().Foreground(accent).Bold(true).Render("⟳ updating…")
+		indicator := lipgloss.NewStyle().Foreground(accent).Bold(true).Render(spinnerGlyph(m.spinnerFrame) + " updating…")
 		right = lipgloss.JoinHorizontal(lipgloss.Left, indicator, "  ", right)
 	}
 	// Pad to full width so the bg is uniform and the version sits flush right.
@@ -99,7 +99,7 @@ func (m *model) View() string {
 			treeContent += "\n" + bodyCellStyle.Render(blankLine)
 		}
 	} else if m.searching {
-		treeContent = bodyCellStyle.Render("  ⟳ Searching...")
+		treeContent = bodyCellStyle.Render("  " + spinnerGlyph(m.spinnerFrame) + " Searching...")
 		for i := 0; i < treeContentH-1; i++ {
 			treeContent += "\n" + bodyCellStyle.Render(blankLine)
 		}
@@ -255,7 +255,7 @@ func (m *model) viewSearchModal() string {
 		modalContent = lipgloss.JoinVertical(lipgloss.Left,
 			modalTitleStyle.Render("Ask whatsinstalled"),
 			"",
-			lipgloss.NewStyle().Foreground(fgBright).Render("⟳  Searching..."),
+			lipgloss.NewStyle().Foreground(fgBright).Render(spinnerGlyph(m.spinnerFrame)+"  Searching..."),
 			"",
 			lipgloss.NewStyle().Foreground(fg).Render(m.semanticQuery),
 			"",

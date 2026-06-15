@@ -23,7 +23,7 @@ func (m *model) Init() tea.Cmd {
 	}
 	return tea.Batch(m.loadData, func() tea.Msg {
 		return m.fullInitWithProgress()
-	})
+	}, spinTick())
 }
 
 // Update is the Bubble Tea event loop: it routes key presses by active mode and
@@ -407,6 +407,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.searchMsg = ""
 		m.tabIndex = 0 // switch to the Results tab (first)
 		cmds = append(cmds, m.loadData)
+
+	case spinnerTickMsg:
+		m.spinnerFrame++
+		if m.scanning || m.searching || m.bgUpdating {
+			cmds = append(cmds, spinTick())
+		}
 	}
 
 	return m, tea.Batch(cmds...)
