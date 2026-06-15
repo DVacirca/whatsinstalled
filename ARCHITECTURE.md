@@ -269,11 +269,11 @@ The ranking formula is configurable through `search.Options`:
 
 | Variant | KeywordWeight | Threshold | ExpandQuery |
 |---|---|---|---|
-| default | 1.0 | 0.05 | true |
+| default | 0.0 | 0.05 | true |
 | semantic-only | 0.0 | 0.05 | true |
-| no-expand | 1.0 | 0.05 | false |
+| no-expand | 0.0 | 0.05 | false |
 | keyword-2x | 2.0 | 0.05 | true |
-| thr-0 | 1.0 | 0.0 | true |
+| thr-0 | 0.0 | 0.0 | true |
 
 ### Graceful degradation
 
@@ -303,9 +303,10 @@ whatsinstalled eval --out results.json        # save results
 whatsinstalled eval --baseline results.json   # diff against a baseline
 ```
 
-> Current finding: `semantic-only` (KeywordWeight = 0) reaches MRR ≈ 0.64,
-> beating `default` (≈ 0.53) — i.e. the keyword boost presently *hurts*
-> relevance. Tune via `search.DefaultOptions()`, then re-measure with `eval`.
+> Eval finding: the keyword boost hurts relevance (default MRR ≈ 0.64 vs
+> keyword-2x ≈ 0.27). The production default (`DefaultOptions`) sets
+> `KeywordWeight = 0` (semantic-only ranking). The mechanism is kept wired
+> so the harness can continue to measure variants.
 
 ---
 
@@ -378,8 +379,9 @@ Search quality is capped by how much meaningful text each package carries.
 Today that text is `name + source + description`, where the description is
 often empty (docker, podman, go, appimage, nix, flatpak return none) and the
 only "associations" come from a **static, hand-maintained** `domainSynonyms` map
-in `internal/nlp/search.go`. The keyword boost built on top of it currently
-*hurts* relevance (`semantic-only` MRR ≈ 0.64 vs `default` ≈ 0.53).
+in `internal/nlp/search.go`. The keyword boost built on top of it
+was shown to hurt relevance (MRR ~0.53 vs ~0.64 semantic-only), so the
+production default now uses `KeywordWeight = 0`.
 
 The planned fix is a two-track body of work already specced under `plans/`:
 

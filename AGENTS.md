@@ -57,9 +57,8 @@ internal/tui        Bubble Tea dashboard, tree view, styles, themes
 - To change ranking, edit `search.DefaultOptions()` / `search.Rank`, then measure with
   `whatsinstalled eval` (variants: default, no-expand, semantic-only, keyword-2x, thr-0).
   Save `--out base.json`, then `--baseline base.json` to catch regressions.
-- Known finding: the keyword boost currently *hurts* relevance (semantic-only beats
-  default on MRR); `nlp.ExpandQuery` only fires when the query literally contains a
-  domain keyword. See MEMORY.md.
+- Known finding: the keyword boost was shown to hurt relevance (semantic-only beats
+  default on MRR). `DefaultOptions.KeywordWeight` is now 0.
 - Curated golden queries live in `internal/search/eval/queries.json` — expand them.
 
 ## Conventions
