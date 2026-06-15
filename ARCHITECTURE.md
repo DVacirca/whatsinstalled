@@ -1,13 +1,13 @@
 # whatsinstalled — Architecture
 
-`whatsinstalled` is a single-binary Go CLI/TUI that inventories software
-installed across **22 package managers**, enriches each package with a
-description, embeds it with a BERT model, and answers natural-language
-("Ask whatsinstalled") semantic queries over your machine.
+This document describes how `whatsinstalled` works internally — the data flow,
+storage, pipelines, and packages. For **what it detects, how to use it, and the
+keybindings**, see the [README](README.md); this doc deliberately does not repeat
+that user-facing reference.
 
-The design goal is a **cold search that cannot hang**: scanning, enrichment, and
-embedding all happen up front in an init pipeline, so a query is reduced to a
-single in-memory vector ranking.
+The central design constraint is a **cold search that cannot hang**: all
+scanning, enrichment, and embedding happen up front in an init pipeline, so a
+query reduces to a single in-memory vector ranking.
 
 ---
 
@@ -331,55 +331,27 @@ whatsinstalled eval --baseline results.json   # diff against a baseline
 ```
 
 The tree leaf row has **8 columns**: Name · Version · Source · Location · User ·
-Size · Added · Used.
+Size · Added · Used. The full keybinding reference lives in the
+[README](README.md#key-bindings-tui).
 
-### Keybindings
-
-| Key | Action |
-|---|---|
-| `j` / `k` / `↑` / `↓` | navigate tree |
-| `→` / `l` / `Space` | expand group |
-| `←` / `h` | collapse group |
-| `Tab` / `Shift+Tab` | switch source tabs |
-| `/` | filter (substring, current tab) |
-| `?` | "Ask whatsinstalled" semantic search |
-| `Enter` / `d` | detail overlay |
-| `r` | rescan all |
-| `a` | about modal |
-| `t` | theme picker (7 themes) |
-| `:` | command palette |
-| `D` | toggle auto-installed deps |
-| `Esc` | clear / close / cancel |
-| `q` / `Ctrl+C` | quit |
-
-### Themes
-
-`t` opens a picker with 7 themes — TokyoNight (default), Palenight, Dracula,
-Nord, Gruvbox, Catppuccin, Monokai — persisted across restarts.
+Themes are defined in `styles.go` (7 built-ins); `applyTheme` rebuilds the
+colour and style variables, and the choice is persisted under
+`~/.config/whatsinstalled/`.
 
 ---
 
-## Commands
-
-| Command | Purpose |
-|---|---|
-| `whatsinstalled` | launch the TUI dashboard |
-| `whatsinstalled scan` | CLI rescan, print per-source counts |
-| `whatsinstalled eval` | search-ranking evaluation (MRR / Hit@k) |
-| `whatsinstalled eval --synthetic N` | add N synthetic queries |
-| `whatsinstalled eval --variant X` | select a ranking variant |
-| `whatsinstalled eval --baseline file.json` | diff against a baseline |
-| `whatsinstalled --version` | print version |
-| `whatsinstalled --db PATH` | override the DB path |
-
-## Build / Test
+## Development
 
 ```bash
 go build ./...                                   # compile all packages
 go build -o whatsinstalled ./cmd/whatsinstalled  # build the binary
-go test ./...                                    # full suite
+go test ./...                                    # full suite (doctests + unit + integration)
 go vet ./...                                     # vet
 ```
+
+The CLI surface (`whatsinstalled`, `scan`, `eval …`, `--db`, `--version`) is
+covered by the [README](README.md) for usage and by the **Evaluation Harness**
+section above for `eval`.
 
 ## Runtime Facts
 
@@ -391,3 +363,50 @@ go vet ./...                                     # vet
   search is just one query-encode plus in-memory scoring — fast, and unable to
   hang. Enrichment and embedding are **pre-computation only**; they never run on
   the search hot path.
+
+---
+
+## Roadmap & Future Work
+
+The current architecture works end-to-end, but its quality and reach are bounded
+in a few concrete places. Each gap below names what limits the tool today and the
+planned direction that closes it.
+
+### The headline gap: thin per-package text
+
+Search quality is capped by how much meaningful text each package carries.
+Today that text is `name + source + description`, where the description is
+often empty (docker, podman, go, appimage, nix, flatpak return none) and the
+only "associations" come from a **static, hand-maintained** `domainSynonyms` map
+in `internal/nlp/search.go`. The keyword boost built on top of it currently
+*hurts* relevance (`semantic-only` MRR ≈ 0.64 vs `default` ≈ 0.53).
+
+The planned fix is a two-track body of work already specced under `plans/`:
+
+- **Specialized metadata model** (`plans/specialized-metadata-model.md`) — a
+  tiny, local generative model, distilled from a larger teacher LLM and
+  specialized on Linux packages, that emits structured metadata per package:
+  `categories`, `associations`, `use_cases`, `related_tools`, `aliases`.
+- **Metadata enrichment pipeline** (`plans/metadata-enrichment-pipeline.md`) — a
+  new `internal/metadata` package with a `Generator` interface (stub / teacher /
+  local backends) that runs **only at init**, writes the metadata, and feeds the
+  `use_cases` text into the existing MiniLM embedding path.
+
+Crucially this keeps the "no generative call at query time" invariant: richer
+embeddings widen recall ("web tools" → Django, node, axios) while search stays a
+pure vector ranking that cannot hang.
+
+### Other known gaps
+
+| Area | Gap today | Planned direction |
+|---|---|---|
+| **Ranking fusion** | `Score = cosine + KeywordWeight × keyword` with hand-set weights; small golden set (`queries.json`) limits tuning signal. | Treat `search.Options` as tunable, sweep variants with `eval` against a baseline, grow the curated set, and lean less on the keyword boost once metadata is richer. |
+| **Enrichment coverage** | Several sources (docker, podman, go, appimage, nix, flatpak) yield no description, so their vectors are just name + source. | Source-specific enrichers (image labels/manifests, Go module docs, flatpak AppStream, nix attrs) feeding the same 30-day cache; the metadata model covers the long tail. |
+| **Search scaling** | Every query loads *all* vectors via `ListWithEmbeddings()` and scores in memory; embeddings are stored as JSON text. Fine for thousands, not for very large inventories. | An on-disk / quantized vector index if inventories grow, behind the unchanged pure `search.Rank` contract so the TUI and eval stay in lock-step. |
+| **Usage signal** | `Added` / `Used` derive from file mtime/atime, which `noatime` mounts and routine tooling make noisy; columns are often blank. | More robust last-used tracking so "what haven't I used in months?" becomes trustworthy. |
+| **Temporal view** | The inventory is a point-in-time snapshot with no history. | Optional snapshots and diffs ("what changed since last week") and export — while deliberately staying read-only (no install/uninstall). |
+| **Portability** | Tuned for Debian/Ubuntu and WSL; macOS and other distros are partially covered. | Broaden scanner coverage and add cross-distro CI. |
+| **Model bootstrap** | First run downloads a ~177 MB model; absent it, search silently degrades to substring matching. | Offer a smaller/quantized model option and make the degraded mode more visible in the UI. |
+
+See also `PLAN.md` for the original design and the `plans/` directory for the
+detailed work breakdowns.
