@@ -38,7 +38,7 @@ dynamically per machine, so you never see empty tabs.
 | **npm** | Top-level npm packages | Global + any `package.json` project under `~/*` and the current dir |
 | **pnpm** | Global pnpm packages | `pnpm ls -g` |
 | **yarn** | Global yarn (v1) packages | `yarn global list` |
-| **pip** | Top-level pip packages | System Python + `.venv`/`venv`/`env` virtualenvs under `~/*` and the current dir |
+| **pip** | Top-level pip packages | System Python + `.venv`/`venv`/`env` virtualenvs under `~/*` (read from package metadata) |
 | **pipx** | Isolated Python CLI apps | `~/.local/share/pipx/venvs` |
 | **uv** | `uv tool install` CLI tools | `~/.local/share/uv/tools` |
 | **conda** | Packages per environment | All conda environments |

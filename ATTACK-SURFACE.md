@@ -71,7 +71,7 @@ flowchart LR
 
 | # | Surface | Vector | Worst-case impact | Severity |
 |---|---|---|---|---|
-| 1 | Executing discovered binaries | fake `.venv/bin/pip` in a scanned dir or CWD | local code execution as the user | **High** |
+| 1 | Executing discovered binaries | fake `.venv/bin/pip` in a scanned dir or CWD | local code execution as the user | **High — fixed** |
 | 2 | `PATH` hijacking | malicious `npm`/`docker`/`apt`/… earlier on `PATH` | local code execution as the user | **Medium** |
 | 3 | Terminal escape injection | hostile package name/description rendered in the TUI | UI spoofing, terminal-emulator exploits | **Medium** |
 | 4 | Registry requests | unescaped package name in URL; unbounded response body | request manipulation, memory DoS | **Low–Medium** |
@@ -81,33 +81,37 @@ flowchart LR
 
 ---
 
-## 1. Executing binaries discovered in scanned locations — High
+## 1. Executing binaries discovered in scanned locations — High (pip fixed)
 
-The pip scanner looks for `.venv` / `venv` / `env` directories under each entry
-in `~/*` **and in the current working directory**, then executes the `pip`
-binary it finds there:
+**Status: the pip vector is fixed.** Local virtualenvs are now inventoried by
+reading their on-disk metadata instead of executing a `pip` binary found inside
+them, and the current-directory scan was removed.
 
-- `internal/scanner/pip.go:50` — `pipBin := filepath.Join(venvPath, "bin", "pip")` under `~/*`
-- `internal/scanner/pip.go:67` — same for the **current directory**
-- `internal/scanner/pip.go:81` — `exec.Command(pipBin, "list", "--format=json")` (and `pip show …`)
+**The original issue.** The pip scanner looked for `.venv` / `venv` / `env`
+directories under each entry in `~/*` **and in the current working directory**,
+then executed the `pip` binary it found there (`exec.Command(pipBin, "list", …)`
+plus `pip show …`). Because that binary comes from a directory that may be
+attacker-controlled — a cloned repo, an unpacked tarball, a synced/shared folder
+— simply running `whatsinstalled` while sitting in or next to such a tree
+executed **attacker-supplied code with the user's privileges**. The CWD case made
+it a one-liner: `cd ./malicious-repo && whatsinstalled`.
 
-Because the binary is taken from a directory that may be attacker-controlled
-(a cloned repo, an unpacked tarball, a synced/shared folder), simply running
-`whatsinstalled` while sitting in — or next to — such a tree executes
-**attacker-supplied code with the user's privileges**. The CWD case makes this a
-one-liner: `cd ./malicious-repo && whatsinstalled`.
+**The fix** (`internal/scanner/pip.go`):
 
-The conda scanner is similar but lower risk: it prefers `conda` on `PATH`, else
-`~/miniconda3/bin/conda` (`internal/scanner/conda.go:57-64`) — a path under the
-user's own home.
+- `scanVenvMetadata()` reads each venv's `lib/python3*/site-packages/*.dist-info/METADATA`
+  (and `*.egg-info/PKG-INFO`) directly — name, version, summary — and **never
+  executes anything from the venv**.
+- The **current-directory** virtualenv scan was removed entirely.
+- A regression test (`pip_test.go`) plants a hostile `bin/pip` in a fake venv and
+  asserts it is never run.
 
-**Mitigations**
-- Do not execute interpreter/tool binaries found in world- or project-writable
-  locations. Prefer a fixed, trusted absolute path, or read package inventories
-  from on-disk metadata (`*.dist-info`, `RECORD`) instead of invoking `pip`.
-- Drop or explicitly opt-in the **CWD** virtualenv scan.
-- If a discovered binary must be run, verify ownership/permissions first (owned
-  by the current user, not group/other-writable) and resolve symlinks.
+The **system** pip is still invoked from `PATH` (`scanWithPip("pip", "system")`),
+which is the expected trusted-tool case and is covered by §2 rather than here.
+
+**Still open (lower risk):** the conda scanner prefers `conda` on `PATH`, else
+`~/miniconda3/bin/conda` (`internal/scanner/conda.go:57-64`). The home path is
+user-owned; the `PATH` lookup is the §2 concern. The same "read metadata, don't
+exec discovered binaries" treatment could be applied if warranted.
 
 ## 2. `PATH` hijacking — Medium
 
@@ -220,8 +224,9 @@ behind a clearly-guarded, argument-safe path if the feature returns.
 
 ## Hardening priorities
 
-1. **Stop executing binaries from untrusted/CWD paths** (§1) — biggest lever;
-   prefer reading package metadata files over invoking discovered interpreters.
+1. **Stop executing binaries from untrusted/CWD paths** (§1) — biggest lever.
+   Done for pip (reads `*.dist-info` metadata; CWD scan removed); apply the same
+   treatment to conda if warranted.
 2. **Sanitize terminal output** of all package-derived strings (§3).
 3. **Resolve tools to trusted absolute paths / sanitize `PATH`** (§2) and document
    running unprivileged.
