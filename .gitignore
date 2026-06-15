@@ -1,2 +1,5 @@
 # eval harness output
 eval-report.json
+
+# build artifact
+installr
