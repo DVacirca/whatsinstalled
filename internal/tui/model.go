@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -134,13 +135,10 @@ func NewModel(s *store.Store) *model {
 }
 
 // buildTabs rebuilds the tab labels from the currently loaded counts. "All" is
-// always first; the remaining source tabs follow in alphabetical order. A STABLE
-// order matters because m.tabIndex is positional — iterating the m.counts map
-// directly randomized the order on every rebuild, desyncing the highlighted
-// label from the loaded data.
+// always first; the remaining source tabs follow in alphabetical order.
 func (m *model) buildTabs() {
 	sources := []string{""}
-	labels := []string{"All"}
+	labels := []string{fmt.Sprintf("All (%d)", m.total)}
 
 	var names []string
 	for src, cnt := range m.counts {
@@ -152,7 +150,7 @@ func (m *model) buildTabs() {
 
 	for _, src := range names {
 		sources = append(sources, src)
-		labels = append(labels, capitalise(src))
+		labels = append(labels, fmt.Sprintf("%s (%d)", capitalise(src), m.counts[src]))
 	}
 
 	m.availableSources = sources
@@ -183,7 +181,7 @@ func (m *model) visibleTabSources() []string {
 // visibleTabLabels returns the labels matching visibleTabSources.
 func (m *model) visibleTabLabels() []string {
 	if m.semanticResults != nil {
-		return append([]string{"Results"}, m.availableLabels...)
+		return append([]string{fmt.Sprintf("Results (%d)", len(m.semanticResults))}, m.availableLabels...)
 	}
 	return m.availableLabels
 }

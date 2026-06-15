@@ -205,7 +205,6 @@ var (
 var (
 	shellStyle         lipgloss.Style
 	shellTitleStyle    lipgloss.Style
-	shellCountStyle    lipgloss.Style
 	shellHeaderStyle   lipgloss.Style
 	separatorStyle     lipgloss.Style
 	tabInactiveStyle   lipgloss.Style
@@ -243,9 +242,6 @@ func applyTheme(t Theme) {
 
 	shellTitleStyle = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(fgBright)
-
-	shellCountStyle = lipgloss.NewStyle().
 		Foreground(fgBright)
 
 	shellHeaderStyle = lipgloss.NewStyle().

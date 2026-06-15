@@ -61,15 +61,7 @@ func (m *model) View() string {
 
 	// ── Title bar ──
 	title := shellTitleStyle.Render("whatsinstalled")
-	var countParts []string
-	for _, src := range m.availableSources {
-		if src == "" {
-			continue
-		}
-		countParts = append(countParts, fmt.Sprintf("%s %d", src, m.counts[src]))
-	}
-	counts := shellCountStyle.Render(strings.Join(countParts, "  │  "))
-	titleContent := lipgloss.JoinHorizontal(lipgloss.Left, title, "  ", counts)
+	titleContent := title
 	// Right corner: version
 	right := lipgloss.NewStyle().Foreground(fgDim).Render(version.Version)
 	// Pad to full width so the bg is uniform and the version sits flush right.
@@ -78,7 +70,7 @@ func (m *model) View() string {
 		titleContent += strings.Repeat(" ", pad)
 	}
 	titleContent += right
-	// Clamp so a long counts list can't overflow/wrap on narrow terminals.
+	// Clamp so it can't overflow/wrap on narrow terminals.
 	titleBar := shellStyle.MaxWidth(sepWidth).Render(titleContent)
 
 	// ── Separator ──
