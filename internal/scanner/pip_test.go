@@ -60,7 +60,7 @@ func TestScanVenvMetadataDoesNotExecutePip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pkgs := PipScanner{}.scanVenvMetadata(venv, proj)
+	pkgs := PipScanner{}.scanVenvMetadata(venv, proj, "pip")
 
 	if _, err := os.Stat(marker); err == nil {
 		t.Fatal("malicious venv pip was executed — scanner must read metadata only")
@@ -80,7 +80,7 @@ func TestScanVenvMetadataDoesNotExecutePip(t *testing.T) {
 // TestScanVenvMetadataIgnoresNonVenv ensures a plain directory yields nothing.
 func TestScanVenvMetadataIgnoresNonVenv(t *testing.T) {
 	dir := t.TempDir()
-	if pkgs := (PipScanner{}).scanVenvMetadata(dir, dir); pkgs != nil {
+	if pkgs := (PipScanner{}).scanVenvMetadata(dir, dir, "pip"); pkgs != nil {
 		t.Fatalf("expected nil for non-venv dir, got %d packages", len(pkgs))
 	}
 }

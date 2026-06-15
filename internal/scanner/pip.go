@@ -49,8 +49,9 @@ func (s PipScanner) Scan() ([]store.Package, error) {
 					continue
 				}
 				path := filepath.Join(home, entry.Name())
+				src := sourceForProject(path)
 				for _, venvName := range []string{".venv", "venv", "env"} {
-					pkgs = append(pkgs, s.scanVenvMetadata(filepath.Join(path, venvName), path)...)
+					pkgs = append(pkgs, s.scanVenvMetadata(filepath.Join(path, venvName), path, src)...)
 				}
 				// Depth 2: ~/projects/myapp/.venv
 				if subEntries, err := os.ReadDir(path); err == nil {
@@ -59,8 +60,9 @@ func (s PipScanner) Scan() ([]store.Package, error) {
 							continue
 						}
 						subPath := filepath.Join(path, sub.Name())
+						src := sourceForProject(subPath)
 						for _, venvName := range []string{".venv", "venv", "env"} {
-							pkgs = append(pkgs, s.scanVenvMetadata(filepath.Join(subPath, venvName), subPath)...)
+							pkgs = append(pkgs, s.scanVenvMetadata(filepath.Join(subPath, venvName), subPath, src)...)
 						}
 					}
 				}
@@ -75,7 +77,7 @@ func (s PipScanner) Scan() ([]store.Package, error) {
 // site-packages *.dist-info/METADATA (and *.egg-info/PKG-INFO) files on disk,
 // without executing anything from the venv. Returns nil if the path is not a
 // venv. This is the safe replacement for invoking the venv's own `pip`.
-func (s PipScanner) scanVenvMetadata(venvPath, location string) []store.Package {
+func (s PipScanner) scanVenvMetadata(venvPath, location, source string) []store.Package {
 	siteDir := venvSitePackages(venvPath)
 	if siteDir == "" {
 		return nil
@@ -106,7 +108,7 @@ func (s PipScanner) scanVenvMetadata(venvPath, location string) []store.Package 
 		p := store.Package{
 			Name:        name,
 			Version:     version,
-			Source:      "pip",
+			Source:      source,
 			Location:    location,
 			UpdatedAt:   time.Now(),
 			User:        owner,
@@ -314,3 +316,12 @@ func (s PipScanner) pipShowDescriptions(pipBin string, raw []struct {
 }
 
 var _ Scanner = PipScanner{}
+
+// sourceForProject returns "uv" if the project directory has a uv.lock file,
+// indicating it's a uv-managed project. Otherwise returns "pip".
+func sourceForProject(dir string) string {
+	if _, err := os.Stat(filepath.Join(dir, "uv.lock")); err == nil {
+		return "uv"
+	}
+	return "pip"
+}
