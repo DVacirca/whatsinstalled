@@ -1,6 +1,6 @@
 # Memory
 
-## installr
+## whatsinstalled
 
 ### Go Module / Toolchain
 - `go mod tidy` with no packages won't download dependencies. Must have at least one `.go` file before running it.
@@ -64,11 +64,11 @@
 ### General
 - Keep imports clean — `go build ./...` quickly surfaces unused imports.
 - For `exec.ExitError`, `Stderr` is a `[]byte`, not a `string`.
-- **Always rebuild the binary** (`go build -o installr ./cmd/installr`) after making scanner changes. `go build ./...` only compiles packages, not the final binary. A stale `./installr` binary will silently ignore new scanners.
+- **Always rebuild the binary** (`go build -o whatsinstalled ./cmd/whatsinstalled`) after making scanner changes. `go build ./...` only compiles packages, not the final binary. A stale `./whatsinstalled` binary will silently ignore new scanners.
 
 ### Semantic Search (LLM Integration)
 - **Cybertron + Spago**: `github.com/nlpodyssey/cybertron` is the Go package for running HuggingFace transformers. It depends on `spago` (pure-Go ML). After `go get`, run `go mod tidy` to resolve all transitive deps.
-- **Model**: `sentence-transformers/all-MiniLM-L6-v2` — ~22MB download, 384-dimensional embeddings. First run downloads and caches to `~/.installr/models/`.
+- **Model**: `sentence-transformers/all-MiniLM-L6-v2` — ~22MB download, 384-dimensional embeddings. First run downloads and caches to `~/.whatsinstalled/models/`.
 - **Embedding caching**: Compute once per package, store as JSON in SQLite `embedding` column. Subsequent queries are ~50-200ms.
 - **Cosine similarity**: Score > 0.3 filters noise; top 20 results shown.
 - **Key handling**: Space key (`msg.String() == " "`) must be explicitly caught in search mode, otherwise it falls through to the outer `case " "` (tree expand). Enter key works but must not be caught by `case "d", "enter"` in the outer switch — the search mode check must come first.
@@ -258,7 +258,7 @@
 #### User wanted a splash screen during init with feedback
 - **Root cause**: Init progress was only shown in the tree panel area as plain text, not a proper centered splash. User expected a clear "Updating packages" overlay on launch.
 - **Fix**: Added a centered splash screen overlay (`modalBorderStyle`) that covers the entire screen during init:
-  - Title: "installr"
+  - Title: "whatsinstalled"
   - Subtitle: "⟳ Updating packages"
   - Dynamic progress: "Scanning apt... 1847 found (1847 total)", "Enriching descriptions... 253/253 packages", "Computing embeddings... 1800 packages"
   - The splash disappears when init completes
@@ -422,16 +422,16 @@
 - **Why it had been done**: the old semantic path enriched + embedded *at query time* through Bubble Tea channels, which was the documented source of every UI freeze (hangs, double-`isDone` races, infinite loops).
 - **Fix (restore + improve)**: Enter now runs `startSearch()` → `search()` again, but relies on init (`fullInitWithProgress`) having already pre-computed descriptions + embeddings — so search is **one query-encode + in-memory cosine/keyword scoring**, no enrichment/embedding in the hot path. It runs in a `tea.Cmd` goroutine (panic-recovered, `searchVersion`-guarded, 60s `searchTimeoutMsg` safety net), so it can't hang.
 - **Graceful fallbacks**: `embedder == nil` → keep the live substring matches; `ListWithEmbeddings()` empty (fresh DB, init still running) → `search()` falls back to `SearchText`. So the modal never errors out or shows an empty void.
-- **UX**: title back to "Ask installr"; live substring matches shown as an instant *preview* labelled "Enter to search by meaning"; Enter commits the semantic search into the Results tab.
+- **UX**: title back to "Ask whatsinstalled"; live substring matches shown as an instant *preview* labelled "Enter to search by meaning"; Enter commits the semantic search into the Results tab.
 - **Kept the dead enrichment chain** (`enrich()`, `computeEmbeddings()`, `enrichmentProgressMsg/CompleteMsg`, `pollProgressCmd`) — unreachable at runtime but `search_enrichment_test.go` (~15 tests) still asserts on those types; removing them is a separate cleanup, not worth it here.
-- **Verified on real data**: `~/.installr.db` has 5182/5182 packages embedded; queries return in ~0.5–0.7s with strong results (e.g. "compress files" → gunzip/gzip/lzma/7za; "monitor system resources" → btop/sar/iostat/sysstat). Model cached at `~/.installr/models/sentence-transformers` (177M). DB path is `~/.installr.db` (NOT `~/.installr/*.db`); no `sqlite3` CLI on this box — query via a throwaway Go program using the `store` package.
+- **Verified on real data**: `~/.whatsinstalled.db` has 5182/5182 packages embedded; queries return in ~0.5–0.7s with strong results (e.g. "compress files" → gunzip/gzip/lzma/7za; "monitor system resources" → btop/sar/iostat/sysstat). Model cached at `~/.whatsinstalled/models/sentence-transformers` (177M). DB path is `~/.whatsinstalled.db` (NOT `~/.whatsinstalled/*.db`); no `sqlite3` CLI on this box — query via a throwaway Go program using the `store` package.
 - **Files**: `internal/tui/dashboard.go`
 
-### Session: Data-Driven Eval Harness for "Ask installr" (IR metrics)
+### Session: Data-Driven Eval Harness for "Ask whatsinstalled" (IR metrics)
 
 #### Goal: measure ranking quality so tuning isn't guesswork
 - **Refactor**: extracted the ranking out of `(*model).search` into a pure, UI/DB/network-free `search.Rank(queryVec, query, pkgs, opts) []Result` (`internal/search/rank.go`); the TUI and the harness now score with identical code. `search.Options{KeywordWeight, Threshold, TopK}`; `DefaultOptions` = {1.0, 0.05, 50}. Query expansion (`nlp.ExpandQuery`) stays at the caller (it changes the embedded text). `(*model).search` rewired to call it; the no-embeddings `SearchText` fallback stayed. Removed now-unused `sort` import from `dashboard.go`.
-- **Harness**: `installr eval` subcommand (`internal/cmd/eval.go`) + model-free `internal/search/eval` package (metrics, synthetic gen, report/diff — all unit-tested without the model). Golden set = `internal/search/eval/queries.json` (user-supplied curated, currently 3 examples) + auto **synthetic known-item** queries (a package's description → that package). Metrics: **MRR + Hit@1/3/10**. Flags: `--synthetic N`, `--variant default|no-expand|semantic-only|keyword-2x|thr-0|all`, `--out`, `--baseline <report.json>` (per-query regression diff). Writes `eval-report.json` (gitignored).
+- **Harness**: `whatsinstalled eval` subcommand (`internal/cmd/eval.go`) + model-free `internal/search/eval` package (metrics, synthetic gen, report/diff — all unit-tested without the model). Golden set = `internal/search/eval/queries.json` (user-supplied curated, currently 3 examples) + auto **synthetic known-item** queries (a package's description → that package). Metrics: **MRR + Hit@1/3/10**. Flags: `--synthetic N`, `--variant default|no-expand|semantic-only|keyword-2x|thr-0|all`, `--out`, `--baseline <report.json>` (per-query regression diff). Writes `eval-report.json` (gitignored).
 - **Phase 2 (LLM-judge) deferred, designed-in**: judge cost scales with top-K shown, NOT corpus size → ~$0.12/50-query run on Haiku, cached `(query,pkg)` re-runs ≈ pennies. `Result` keeps per-component scores so nDCG drops in later. Not built; no anthropic-sdk-go dependency yet.
 - **KEY FINDING (data-driven, ran on real DB, 5321 embedded pkgs)**: the keyword boost **hurts** ranking. `semantic-only` (KeywordWeight=0) MRR **0.640** vs `default` (KeywordWeight=1) **0.527**; `keyword-2x` collapses to 0.274. Also `no-expand` == `default` — `ExpandQuery` never fires unless the query literally contains a domain keyword (network/python/web/…), which real queries rarely do. `thr-0` == `default` (threshold only filters the tail). **Next tuning pass: lower/remove `KeywordWeight`; reconsider `ExpandQuery`.** "tools for editing video" is the worst curated query (RR 0.200, ffmpeg at rank 5 — text editors crowd it out).
 - **Files**: `internal/search/rank.go`, `internal/search/eval/{eval.go,queries.json}`, `internal/cmd/eval.go`, `internal/tui/dashboard.go`

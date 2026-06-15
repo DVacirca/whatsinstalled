@@ -1,10 +1,10 @@
-# Plan — Metadata enrichment pipeline in installr (Body of work 2)
+# Plan — Metadata enrichment pipeline in whatsinstalled (Body of work 2)
 
 ## Context
 
-This is the installr-side integration for the specialized metadata model described
+This is the whatsinstalled-side integration for the specialized metadata model described
 in `specialized-metadata-model.md`. The model produces rich plain-language
-metadata per package; this work feeds that metadata into installr's init flow and
+metadata per package; this work feeds that metadata into whatsinstalled's init flow and
 into the embedding/search path so the "Ask" feature gets richer categories and
 associations (e.g. "web tools" → Django, node, axios).
 
@@ -41,7 +41,7 @@ type Generator interface {
 }
 ```
 
-Backends (selected by installr; rest of the pipeline is backend-agnostic):
+Backends (selected by whatsinstalled; rest of the pipeline is backend-agnostic):
 - `stub` — fixed/empty output, for early dev and tests.
 - `teacher` — direct large-LLM call, for bootstrapping and data collection.
 - `local` — the distilled model from Body of work 1 (the production backend).
@@ -71,7 +71,7 @@ first-run pass reports progress like the enrich and embed phases already do.
 ### 4. Incremental updates
 
 On every launch, `ListWithoutMetadata()` returns only packages without metadata;
-generate for just those. This is the same pattern installr already uses for
+generate for just those. This is the same pattern whatsinstalled already uses for
 missing descriptions (`ListWithoutDescriptions`) and embeddings
 (`ListWithoutEmbeddings`).
 

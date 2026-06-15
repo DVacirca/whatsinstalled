@@ -1,27 +1,27 @@
-# AGENTS.md — working in the installr repo
+# AGENTS.md — working in the whatsinstalled repo
 
 Guidance for AI agents (and humans) working in this codebase. Keep it current.
 
 ## What this is
-`installr` is a Go CLI/TUI that inventories packages installed across many
+`whatsinstalled` is a Go CLI/TUI that inventories packages installed across many
 package managers, enriches them with descriptions, and supports natural-language
-("Ask installr") semantic search. POC/MVP — favour the simplest thing that works
+("Ask whatsinstalled") semantic search. POC/MVP — favour the simplest thing that works
 over enterprise patterns.
 
 ## Build / test / run
 ```bash
 go build ./...                       # compile all packages
-go build -o installr ./cmd/installr  # build the binary (ALWAYS rebuild after changes;
-                                     # a stale ./installr silently ignores new code)
+go build -o whatsinstalled ./cmd/whatsinstalled  # build the binary (ALWAYS rebuild after changes;
+                                     # a stale ./whatsinstalled silently ignores new code)
 go test ./...                        # full suite
 go vet ./...                         # vet
 
-./installr                           # launch the TUI
-./installr scan                      # rescan + print per-source counts
-./installr eval --synthetic 30       # evaluate semantic-search ranking (MRR/Hit@k)
-./installr --version                 # print version
+./whatsinstalled                           # launch the TUI
+./whatsinstalled scan                      # rescan + print per-source counts
+./whatsinstalled eval --synthetic 30       # evaluate semantic-search ranking (MRR/Hit@k)
+./whatsinstalled --version                 # print version
 ```
-installr is read-only: it inventories and searches packages — there is no
+whatsinstalled is read-only: it inventories and searches packages — there is no
 install/uninstall action (removed).
 Note: the shell on this machine prints `command not found: _encode/_decode` noise
 from the user's zsh profile — ignore it; it is not from our code. There is no
@@ -30,7 +30,7 @@ package.
 
 ## Layout
 ```
-cmd/installr        entrypoint
+cmd/whatsinstalled        entrypoint
 cmd/enrich          one-off enrichment helper
 internal/cmd        cobra commands (root, scan, eval)
 internal/scanner    one file per package manager; AllScanners registry + DiscoverScanners
@@ -43,8 +43,8 @@ internal/tui        Bubble Tea dashboard, tree view, styles, themes
 ```
 
 ## Runtime facts (this machine)
-- DB: `~/.installr.db` (NOT `~/.installr/*.db`). Path comes from `store.DBPath()`.
-- Embedding model cached at `~/.installr/models/sentence-transformers` (~177MB,
+- DB: `~/.whatsinstalled.db` (NOT `~/.whatsinstalled/*.db`). Path comes from `store.DBPath()`.
+- Embedding model cached at `~/.whatsinstalled/models/sentence-transformers` (~177MB,
   384-dim). First run downloads it; `nlp.LoadEmbedder()` returns an error if absent
   and search degrades to a substring fallback.
 - Init pipeline (`fullInitWithProgress` in `internal/tui/dashboard.go`) scans →
@@ -52,10 +52,10 @@ internal/tui        Bubble Tea dashboard, tree view, styles, themes
   cannot hang). Do NOT reintroduce enrichment/embedding into the search hot path.
 
 ## Semantic search + evaluation
-- `?` opens "Ask installr"; Enter runs `search.Rank` over `store.ListWithEmbeddings()`.
+- `?` opens "Ask whatsinstalled"; Enter runs `search.Rank` over `store.ListWithEmbeddings()`.
 - Ranking is hybrid: cosine similarity + `nlp.KeywordScore` boost (`KeywordWeight`).
 - To change ranking, edit `search.DefaultOptions()` / `search.Rank`, then measure with
-  `installr eval` (variants: default, no-expand, semantic-only, keyword-2x, thr-0).
+  `whatsinstalled eval` (variants: default, no-expand, semantic-only, keyword-2x, thr-0).
   Save `--out base.json`, then `--baseline base.json` to catch regressions.
 - Known finding: the keyword boost currently *hurts* relevance (semantic-only beats
   default on MRR); `nlp.ExpandQuery` only fires when the query literally contains a

@@ -1,8 +1,8 @@
-# Requirements — installr
+# Requirements — whatsinstalled
 
 ## 1. Overview
 
-`installr` is a CLI/TUI tool that gives a consolidated view of packages installed on a Linux system across multiple package managers plus manually installed binaries. It tracks **all installed** packages (apt includes auto-installed dependencies), shows where each package lives, who installed it, when it was last used, and allows installation and uninstallation.
+`whatsinstalled` is a CLI/TUI tool that gives a consolidated view of packages installed on a Linux system across multiple package managers plus manually installed binaries. It tracks **all installed** packages (apt includes auto-installed dependencies), shows where each package lives, who installed it, when it was last used, and allows installation and uninstallation.
 
 ## 2. Supported Package Managers
 
@@ -81,7 +81,7 @@ Every package must record the user who installed it:
 
 ### 6.1 Layout (Superfile-inspired)
 ```
-┌─ installr ── apt:90 │ snap:3 │ npm:14 │ pip:93 │ conda:1340 ─────┐
+┌─ whatsinstalled ── apt:90 │ snap:3 │ npm:14 │ pip:93 │ conda:1340 ─────┐
 │  Name            Version   Src   Location        User    Size    │
 │▶ ▾ system                   [193]                              │
 │    nginx          1.24.0   apt   system        system   4.2M   │
@@ -102,7 +102,7 @@ Every package must record the user who installed it:
 │                      │                     │ r rescan            │
 │                      │                     │ q quit              │
 ├─────────────────────────────────────────────────────────────────┤
-│ nginx (apt)  │  installr — package tracker                     │
+│ nginx (apt)  │  whatsinstalled — package tracker                     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -130,14 +130,14 @@ Every package must record the user who installed it:
 | `←` / `h` | Collapse group |
 | `Tab` / `Shift+Tab` | Next / previous source tab |
 | `/` | Start filter input |
-| `?` | Ask installr (experimental): semantic search → Results tab |
+| `?` | Ask whatsinstalled (experimental): semantic search → Results tab |
 | `Esc` | Clear filter / close detail / cancel search |
 | `Enter` / `d` | Show detail view (highlights Description panel) |
 | `r` | Force rescan all managers (background) |
 | `q` / `Ctrl+C` | Quit |
 
-### 6.6 Search ("Ask installr")
-Press `?` to open the centered "Ask installr" modal and type a query:
+### 6.6 Search ("Ask whatsinstalled")
+Press `?` to open the centered "Ask whatsinstalled" modal and type a query:
 - As you type, an instant **substring preview** (case-insensitive, name or
   description) is shown for immediate feedback.
 - `Enter` runs **semantic search** — embedding cosine similarity + keyword boost
@@ -147,7 +147,7 @@ Press `?` to open the centered "Ask installr" modal and type a query:
   one query-encode + in-memory scoring (fast, cannot hang). If the model or
   embeddings are unavailable, it falls back to the substring matches.
 - Ranking lives in the pure `internal/search` package (`search.Rank`); its quality
-  is measured by the `installr eval` harness (`internal/search/eval`).
+  is measured by the `whatsinstalled eval` harness (`internal/search/eval`).
 
 ### 6.4 Detail View
 - Pressing `d` highlights the Description panel title (`▸ Description`).
@@ -158,12 +158,12 @@ Press `?` to open the centered "Ask installr" modal and type a query:
 
 | Command | Description |
 |---------|-------------|
-| `installr` | Launch TUI (default) |
-| `installr scan` | Force rescan all managers, print summary, exit |
-| `installr eval [--synthetic N] [--variant ...] [--baseline f] [--out f]` | Score semantic-search ranking (MRR/Hit@k) |
-| `installr --version` | Print the version |
+| `whatsinstalled` | Launch TUI (default) |
+| `whatsinstalled scan` | Force rescan all managers, print summary, exit |
+| `whatsinstalled eval [--synthetic N] [--variant ...] [--baseline f] [--out f]` | Score semantic-search ranking (MRR/Hit@k) |
+| `whatsinstalled --version` | Print the version |
 
-Note: install/uninstall actions were removed — installr is read-only (inventory
+Note: install/uninstall actions were removed — whatsinstalled is read-only (inventory
 + search). Core sources scanned: `apt`, `snap`, `npm`, `pip`, `conda`, `bin`;
 plus, via the `scanner.AllScanners` registry: `pixi`, `pipx`, `uv`, `go`,
 `docker`, `podman`, `brew`, `cargo`, `gem`, `pnpm`, `yarn`, `pacman`, `yay`,
@@ -187,12 +187,12 @@ dependency packages by default; press `a` to toggle. Filtering happens in the
 store (`List`/`Search`/`CountBySource` take a `hideAuto` flag) so tab counts and
 rows stay consistent.
 
-All commands accept `--db <path>` to override the default database location (`~/.installr.db`).
+All commands accept `--db <path>` to override the default database location (`~/.whatsinstalled.db`).
 
 ## 8. Database
 
 - **Engine**: SQLite via `modernc.org/sqlite` (pure Go, no CGO).
-- **Path**: `~/.installr.db` or `INSTALLR_DB` env var.
+- **Path**: `~/.whatsinstalled.db` or `WHATSINSTALLED_DB` env var.
 - **Schema**: Must support migrations (e.g., adding `user` column to existing DBs).
 - **Cache strategy**: Upsert on scan, purge stale records after scan completes.
 
@@ -221,5 +221,5 @@ All commands accept `--db <path>` to override the default database location (`~/
 ## 12. Build & Deployment
 
 - Go 1.25+
-- Single binary output: `go build -o installr ./cmd/installr`
+- Single binary output: `go build -o whatsinstalled ./cmd/whatsinstalled`
 - No external runtime dependencies.

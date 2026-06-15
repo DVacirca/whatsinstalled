@@ -1,4 +1,4 @@
-# installr
+# whatsinstalled
 
 A CLI/TUI that gives you one consolidated view of everything installed on your
 system — across every package manager, language ecosystem, and loose binaries —
@@ -11,13 +11,13 @@ questions like _"which python tools do I have?"_ via a small local LLM
 (experimental).
 
 ```
-installr            # launch the TUI dashboard
-installr scan       # rescan and print a per-source summary
+whatsinstalled            # launch the TUI dashboard
+whatsinstalled scan       # rescan and print a per-source summary
 ```
 
 ## What it detects
 
-`installr` auto-detects the sources below. A source only shows up when its tool
+`whatsinstalled` auto-detects the sources below. A source only shows up when its tool
 is installed **and** it actually has packages — the dashboard tabs are rendered
 dynamically per machine, so you never see empty tabs.
 
@@ -77,7 +77,7 @@ dynamically per machine, so you never see empty tabs.
 ## Build
 
 ```
-go build -o installr ./cmd/installr
+go build -o whatsinstalled ./cmd/whatsinstalled
 ```
 
 Requires Go 1.25+. State is stored in a local SQLite database.

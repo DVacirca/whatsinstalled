@@ -1,7 +1,7 @@
-# installr — TUI Dashboard
+# whatsinstalled — TUI Dashboard
 
 ## Goal
-Build `installr`, a Go/Cobra/Bubble Tea TUI that lists all system packages across 6 sources (apt, snap, npm, pip, conda, bin). The TUI has a clear tabbed layout with distinct panes, supports filtering, semantic search, shows package metadata including last-used time, and allows installing and uninstalling packages.
+Build `whatsinstalled`, a Go/Cobra/Bubble Tea TUI that lists all system packages across 6 sources (apt, snap, npm, pip, conda, bin). The TUI has a clear tabbed layout with distinct panes, supports filtering, semantic search, shows package metadata including last-used time, and allows installing and uninstalling packages.
 
 ## Tech Stack
 - Go 1.25+
@@ -68,7 +68,7 @@ Unique key: `(name, source, location)`
 Three distinct bordered regions:
 
 ```
-┌─ installr ── total:86 ───────────────────────────────────────┐
+┌─ whatsinstalled ── total:86 ───────────────────────────────────────┐
 │ [ All ] [ Apt ] [ Snap ] [ Npm ] [ Pip ]  /filter...         │
 ├───────────────────────────────────────────────────────────────┤
 │ Name           Version    Source   Location       Size        │
@@ -113,8 +113,8 @@ Three distinct bordered regions:
 | `r` | Force rescan all managers (background) |
 | `q` / `ctrl+c` | Quit |
 
-## Semantic Search ("Ask installr")
-- `?` opens the "Ask installr" modal: typing shows an instant substring preview,
+## Semantic Search ("Ask whatsinstalled")
+- `?` opens the "Ask whatsinstalled" modal: typing shows an instant substring preview,
   `Enter` runs the semantic search and shows ranked hits in the **Results** tab.
 - Uses `sentence-transformers/all-MiniLM-L6-v2` (~22MB) via Cybertron (pure-Go);
   package text is embedded as 384-dim vectors with source context ("python
@@ -125,21 +125,21 @@ Three distinct bordered regions:
   embeddings are unavailable.
 - Ranking is hybrid (cosine similarity + keyword boost), implemented in the pure
   `internal/search` package (`search.Rank`) shared by the TUI and the eval harness.
-- Quality is measured with `installr eval` (`internal/search/eval`): MRR / Hit@k
+- Quality is measured with `whatsinstalled eval` (`internal/search/eval`): MRR / Hit@k
   over a curated + synthetic golden set, with variant sweeps and baseline diffs.
 
 ## CLI Commands (Cobra)
-- `installr` → Launch TUI (default)
-- `installr scan` → Force rescan, print summary to stdout, exit
-- `installr eval [--synthetic N] [--variant ...] [--baseline f.json] [--out f.json]` → score search ranking (MRR/Hit@k)
-- `installr --version` → print the version
+- `whatsinstalled` → Launch TUI (default)
+- `whatsinstalled scan` → Force rescan, print summary to stdout, exit
+- `whatsinstalled eval [--synthetic N] [--variant ...] [--baseline f.json] [--out f.json]` → score search ranking (MRR/Hit@k)
+- `whatsinstalled --version` → print the version
 
-(installr is read-only — install/uninstall actions were removed.)
+(whatsinstalled is read-only — install/uninstall actions were removed.)
 
 ## Architecture / File Layout
 ```
-installr/
-├── cmd/installr/main.go
+whatsinstalled/
+├── cmd/whatsinstalled/main.go
 ├── internal/
 │   ├── cmd/
 │   │   ├── root.go           # Cobra root, global flags (--db)
@@ -187,7 +187,7 @@ installr/
 - **Store:** Table-driven tests for CRUD, upsert, stale cleanup. Use temp dirs + `t.TempDir()`.
 - **Scanners:** Mock stdout from package manager commands; test parsing logic in isolation.
 - **TUI:** Test `Update` state machine with typed messages (e.g., `dataLoadedMsg`, `scanCompleteMsg`).
-- **Integration:** Build binary, run `installr scan`, assert stdout contains expected summary.
+- **Integration:** Build binary, run `whatsinstalled scan`, assert stdout contains expected summary.
 
 ## Notes / Constraints
 - Top-level packages only; no transitive dependency scanning.

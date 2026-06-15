@@ -2,7 +2,7 @@
 
 ## Context
 
-installr's "Ask" feature is embedding retrieval (MiniLM via `nlpodyssey/cybertron`)
+whatsinstalled's "Ask" feature is embedding retrieval (MiniLM via `nlpodyssey/cybertron`)
 plus a hardcoded `domainSynonyms` map and a `KeywordScore` boost
 (`internal/nlp/search.go`, `internal/search/rank.go`). Its quality ceiling is set
 by how rich the per-package associations are — and today those associations live
@@ -11,11 +11,11 @@ in a static, hand-maintained map, while many packages carry no description at al
 The fix proposed here is a **separate, heavier generative model**, specialized on
 Linux packages / libraries / environments, that produces **rich plain-language
 metadata** per package. It is distilled from a large *teacher* LLM. It is **never
-called at query time** — only at installr init to generate metadata, which is then
+called at query time** — only at whatsinstalled init to generate metadata, which is then
 embedded (see the companion plan, `metadata-enrichment-pipeline.md`).
 
 This document covers the model itself: dataset, training, packaging, eval. It is
-an ML track (Python / Hugging Face), separate from the Go module. installr depends
+an ML track (Python / Hugging Face), separate from the Go module. whatsinstalled depends
 on it only through a `MetadataGenerator` interface, so the two tracks proceed
 independently.
 
@@ -60,9 +60,9 @@ matches.
 ## Work
 
 1. **Teacher dataset generation**
-   - Corpus: known packages across the sources installr scans — apt, pip/PyPI,
+   - Corpus: known packages across the sources whatsinstalled scans — apt, pip/PyPI,
      npm, cargo/crates, gem, brew, conda, snap, etc. Seed from public package
-     indexes and from real installr scans.
+     indexes and from real whatsinstalled scans.
    - One fixed teacher prompt (large LLM, e.g. Claude) → the schema above.
    - Store as JSONL records `{ "input": {...}, "output": {...} }`.
    - Keep the teacher prompt versioned alongside the dataset.
@@ -79,11 +79,11 @@ matches.
    - Coverage improves **without any runtime external calls** — the runtime path
      stays local-only.
 
-4. **Inference packaging for installr** (decision to lock down)
+4. **Inference packaging for whatsinstalled** (decision to lock down)
    - **Preferred:** export to ONNX / a format a Go runtime (`cybertron` or
      similar) can load in-process, mirroring how MiniLM already loads from
-     `~/.installr/models`.
-   - **Fallback:** ship a sidecar binary that installr shells out to, if the
+     `~/.whatsinstalled/models`.
+   - **Fallback:** ship a sidecar binary that whatsinstalled shells out to, if the
      generator is too heavy to run in-process.
 
 5. **Eval**
@@ -95,7 +95,7 @@ matches.
 
 - A reproducible teacher → JSONL → student pipeline exists.
 - The distilled model produces valid-schema metadata for unseen packages.
-- An installr-loadable artifact (ONNX/in-process or sidecar) is produced and its
+- An whatsinstalled-loadable artifact (ONNX/in-process or sidecar) is produced and its
   interface matches what `internal/metadata` (Body of work 2) expects.
 - Eval shows the model's metadata measurably improves Ask ranking vs the current
   `domainSynonyms` baseline.

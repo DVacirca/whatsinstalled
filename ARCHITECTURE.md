@@ -1,4 +1,4 @@
-# installr — Architecture
+# whatsinstalled — Architecture
 
 Package inventory and semantic search CLI/TUI for Linux. Scans installed
 packages across 22 package managers, enriches them with descriptions, embeds
@@ -10,7 +10,7 @@ them with a BERT model, and supports natural-language search.
 flowchart TD
     subgraph Init["Initialisation Pipeline"]
         SCAN["SCAN<br/>22 package managers<br/>parallel goroutines<br/>Scan() &rarr; []store.Package"]
-        STORE["STORE<br/>SQLite · WAL mode<br/>~/.installr.db"]
+        STORE["STORE<br/>SQLite · WAL mode<br/>~/.whatsinstalled.db"]
         ENRICH["ENRICHMENT<br/>Local tools + remote APIs<br/>30-day cache (SQLite)"]
         EMBED["NLP / EMBEDDING<br/>all-MiniLM-L6-v2<br/>384-dim · cybertron"]
     end
@@ -40,13 +40,13 @@ flowchart TD
 ## Package Layout
 
 ```
-cmd/installr     — binary entrypoint (main.go)
+cmd/whatsinstalled     — binary entrypoint (main.go)
 cmd/enrich       — one-off enrichment helper
 
 internal/cmd     — Cobra commands (root, scan, eval)
 internal/cmd/root.go         — rootCmd, TUI launcher, --db flag
-internal/cmd/subcommands.go  — installr scan
-internal/cmd/eval.go         — installr eval + variant selectors
+internal/cmd/subcommands.go  — whatsinstalled scan
+internal/cmd/eval.go         — whatsinstalled eval + variant selectors
 
 internal/scanner — one file per package manager (22 total)
 scanner.go         — Scanner interface: Name, Scan, IsAvailable, Probe
@@ -133,7 +133,7 @@ CREATE TABLE IF NOT EXISTS enrichment_cache (
 );
 ```
 
-- DB path: `~/.installr.db` (override with `INSTALLR_DB` env var or `--db` flag)
+- DB path: `~/.whatsinstalled.db` (override with `WHATSINSTALLED_DB` env var or `--db` flag)
 - WAL mode via `PRAGMA journal_mode=WAL`
 
 ## Key Store Methods
@@ -194,7 +194,7 @@ After these three phases the DB is fully populated and search is ready.
 
 ## Search Pipeline
 
-1. User presses `?` to open the "Ask installr" modal
+1. User presses `?` to open the "Ask whatsinstalled" modal
 2. As user types, `liveSearch()` runs `db.SearchText(query)` for instant
    substring preview in the modal
 3. User presses Enter → `startSearch()` → `search()` runs in a goroutine:
@@ -231,7 +231,7 @@ The ranking formula is configurable through `search.Options`:
 
 ## Evaluation Harness
 
-`installr eval` runs the same `search.Rank()` function used by the TUI,
+`whatsinstalled eval` runs the same `search.Rank()` function used by the TUI,
 computing standard IR metrics:
 
 - **MRR** (Mean Reciprocal Rank)
@@ -245,12 +245,12 @@ Queries come from two sources:
 
 Usage:
 ```bash
-installr eval                           # default variant, curated + 30 synthetic
-installr eval --synthetic 50            # 50 synthetic queries
-installr eval --variant semantic-only   # specific variant
-installr eval --variant all             # all variants
-installr eval --out results.json        # save results
-installr eval --baseline results.json   # diff against baseline (regression detection)
+whatsinstalled eval                           # default variant, curated + 30 synthetic
+whatsinstalled eval --synthetic 50            # 50 synthetic queries
+whatsinstalled eval --variant semantic-only   # specific variant
+whatsinstalled eval --variant all             # all variants
+whatsinstalled eval --out results.json        # save results
+whatsinstalled eval --baseline results.json   # diff against baseline (regression detection)
 ```
 
 Currently `semantic-only` (KeywordWeight=0) achieves MRR 0.640, outperforming
@@ -259,7 +259,7 @@ Currently `semantic-only` (KeywordWeight=0) achieves MRR 0.640, outperforming
 ## TUI Structure
 
 ```
-+-- installr -- apt:90 | snap:3 | npm:14 ------ v1.0.0-beta --+
++-- whatsinstalled -- apt:90 | snap:3 | npm:14 ------ v1.0.0-beta --+
 |==============================================================|
 :  Name      Version Src  Location     User  Size    Used       :
 :  > system                   [45]                             :
@@ -271,11 +271,11 @@ Currently `semantic-only` (KeywordWeight=0) achieves MRR 0.640, outperforming
 |==============================================================|
 |  v Description                         | v Keys              |
 :  nginx - web server                    | :  Command palette   :
-:                                        | ?  Ask installr     :
+:                                        | ?  Ask whatsinstalled     :
 :                                        | a  About            :
 :                                        | q  Quit             :
 |==============================================================|
-| nginx (apt)  |  installr - tokyo-night                        |
+| nginx (apt)  |  whatsinstalled - tokyo-night                        |
 +--------------------------------------------------------------+
 ```
 
@@ -288,7 +288,7 @@ Currently `semantic-only` (KeywordWeight=0) achieves MRR 0.640, outperforming
 | `←` / `h` | Collapse group |
 | `Tab` / `Shift+Tab` | Switch source tabs |
 | `/` | Filter (substring, current tab) |
-| `?` | "Ask installr" semantic search |
+| `?` | "Ask whatsinstalled" semantic search |
 | `Enter` / `d` | Detail overlay |
 | `r` | Rescan all |
 | `a` | About modal |
@@ -308,32 +308,32 @@ restarts.
 
 | Command | Purpose |
 |---|---|
-| `installr` | Launch TUI dashboard |
-| `installr scan` | CLI rescan, print per-source counts |
-| `installr eval` | Search ranking evaluation (MRR/Hit@k) |
-| `installr eval --synthetic N` | Add N synthetic queries |
-| `installr eval --variant X` | Select ranking variant |
-| `installr eval --baseline file.json` | Diff against baseline |
-| `installr --version` | Print version |
-| `installr --db PATH` | Override DB path |
+| `whatsinstalled` | Launch TUI dashboard |
+| `whatsinstalled scan` | CLI rescan, print per-source counts |
+| `whatsinstalled eval` | Search ranking evaluation (MRR/Hit@k) |
+| `whatsinstalled eval --synthetic N` | Add N synthetic queries |
+| `whatsinstalled eval --variant X` | Select ranking variant |
+| `whatsinstalled eval --baseline file.json` | Diff against baseline |
+| `whatsinstalled --version` | Print version |
+| `whatsinstalled --db PATH` | Override DB path |
 
 ## Build / Test
 
 ```bash
 go build ./...                       # compile all packages
-go build -o installr ./cmd/installr  # build the binary
+go build -o whatsinstalled ./cmd/whatsinstalled  # build the binary
 go test ./...                        # full suite
 go vet ./...                         # vet
-./installr                           # launch TUI
-./installr scan                      # CLI rescan
-./installr eval --synthetic 30       # evaluate search ranking
-./installr --version                 # print version
+./whatsinstalled                           # launch TUI
+./whatsinstalled scan                      # CLI rescan
+./whatsinstalled eval --synthetic 30       # evaluate search ranking
+./whatsinstalled --version                 # print version
 ```
 
 ## Runtime Facts
 
-- DB: `~/.installr.db` (NOT `~/.installr/*.db`)
-- Embedding model: `~/.installr/models/sentence-transformers` (~177MB, 384-dim)
+- DB: `~/.whatsinstalled.db` (NOT `~/.whatsinstalled/*.db`)
+- Embedding model: `~/.whatsinstalled/models/sentence-transformers` (~177MB, 384-dim)
 - First run downloads the model; `nlp.LoadEmbedder()` returns an error if
   absent and search degrades to substring fallback
 - Init pipeline (`fullInitWithProgress`) scans → enriches → embeds, so search
