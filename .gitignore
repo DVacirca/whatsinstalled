@@ -1,9 +1,7 @@
 AGENTS.md
-docs/MEMORY.md
-docs/IDEA.md
-docs/PLAN.md
-docs/TECH.md
-docs/upcoming-features/
+docs/*
+investigations/*
+
 
 
 # eval harness output
