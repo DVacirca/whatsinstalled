@@ -30,7 +30,7 @@ func (s PipScanner) Scan() ([]store.Package, error) {
 	var pkgs []store.Package
 
 	// Global (system Python)
-	global, err := s.scanWithPip("pip", "system")
+	global, err := s.scanWithPip("pip", pipSitePackages("pip"))
 	if err == nil {
 		pkgs = append(pkgs, global...)
 	}
@@ -169,6 +169,22 @@ func parsePyMetadata(path string) (name, version, summary string) {
 	return name, version, summary
 }
 
+// pipSitePackages returns the global site-packages directory reported by
+// `pip show pip`, or "" if it cannot be resolved.
+func pipSitePackages(pipBin string) string {
+	return parsePipLocation(cmdLine(pipBin, "show", "pip"))
+}
+
+// parsePipLocation extracts the Location field from `pip show` output.
+func parsePipLocation(out string) string {
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(line, "Location: ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "Location: "))
+		}
+	}
+	return ""
+}
+
 func (s PipScanner) scanWithPip(pipBin, location string) ([]store.Package, error) {
 	cmd := exec.Command(pipBin, "list", "--format=json")
 	out, err := cmd.Output()
@@ -187,10 +203,7 @@ func (s PipScanner) scanWithPip(pipBin, location string) ([]store.Package, error
 	// Fetch descriptions and dependency info in one bulk pip show call
 	showResult := s.pipShowDescriptions(pipBin, raw)
 
-	owner := "system"
-	if location != "system" {
-		owner = pkg.FileOwner(location)
-	}
+	owner := pkg.FileOwner(location)
 	var pkgs []store.Package
 	for _, r := range raw {
 		info := showResult[r.Name]
@@ -219,22 +232,6 @@ func (s PipScanner) scanWithPip(pipBin, location string) ([]store.Package, error
 					pkgDir = pyPath
 				} else {
 					pkgDir = ""
-				}
-			}
-		} else if location != "system" {
-			for _, venvName := range []string{".venv", "venv", "env"} {
-				venvPath := filepath.Join(location, venvName)
-				candidate := filepath.Join(venvPath, "lib")
-				if entries, err := os.ReadDir(candidate); err == nil {
-					for _, entry := range entries {
-						if entry.IsDir() && strings.HasPrefix(entry.Name(), "python3") {
-							pkgDir = filepath.Join(candidate, entry.Name(), "site-packages", r.Name)
-							break
-						}
-					}
-				}
-				if pkgDir != "" {
-					break
 				}
 			}
 		}

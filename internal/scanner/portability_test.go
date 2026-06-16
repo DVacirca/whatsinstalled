@@ -158,6 +158,16 @@ func TestChunkStrings(t *testing.T) {
 	}
 }
 
+func TestParsePipLocation(t *testing.T) {
+	out := "Name: pip\nVersion: 24.0\nLocation: /usr/lib/python3/dist-packages\nRequires:\n"
+	if got := parsePipLocation(out); got != "/usr/lib/python3/dist-packages" {
+		t.Errorf("parsePipLocation = %q, want /usr/lib/python3/dist-packages", got)
+	}
+	if got := parsePipLocation("Name: pip\nVersion: 24.0\n"); got != "" {
+		t.Errorf("missing Location should yield empty, got %q", got)
+	}
+}
+
 func contains(s []string, v string) bool {
 	for _, x := range s {
 		if x == v {
