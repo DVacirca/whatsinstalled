@@ -14,10 +14,8 @@ import (
 // uvToolsDir returns the directory holding uv's installed tools, preferring
 // uv's own answer and falling back to UV_TOOL_DIR / the platform data dir.
 func uvToolsDir() string {
-	if out, err := exec.Command("uv", "tool", "dir").Output(); err == nil {
-		if d := strings.TrimSpace(string(out)); d != "" {
-			return d
-		}
+	if d := cmdLine("uv", "tool", "dir"); d != "" {
+		return d
 	}
 	if d := os.Getenv("UV_TOOL_DIR"); d != "" {
 		return d

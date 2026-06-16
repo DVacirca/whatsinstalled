@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"whatsinstalled/internal/pkg"
@@ -16,10 +15,8 @@ import (
 // preferring pipx's own answer and falling back to PIPX_HOME / the platform
 // data dir.
 func pipxVenvsDir() string {
-	if out, err := exec.Command("pipx", "environment", "--value", "PIPX_LOCAL_VENVS").Output(); err == nil {
-		if d := strings.TrimSpace(string(out)); d != "" {
-			return d
-		}
+	if d := cmdLine("pipx", "environment", "--value", "PIPX_LOCAL_VENVS"); d != "" {
+		return d
 	}
 	if d := os.Getenv("PIPX_HOME"); d != "" {
 		return filepath.Join(d, "venvs")

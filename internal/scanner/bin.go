@@ -44,11 +44,32 @@ type binCandidate struct {
 }
 
 func (s BinScanner) Scan() ([]store.Package, error) {
-	dirs := discoverBinDirs()
-	seen := make(map[string]bool)
+	cands := collectBinaries(discoverBinDirs())
 
-	// Pass 1: collect every executable so ownership can be resolved in bulk.
+	paths := make([]string, len(cands))
+	for i, c := range cands {
+		paths[i] = c.path
+	}
+	managed := managedSet(paths)
+
+	var pkgs []store.Package
+	for _, c := range cands {
+		if managed[c.path] {
+			continue // owned by a package manager
+		}
+		pkgs = append(pkgs, c.toPackage())
+	}
+
+	s.enrichDescriptions(pkgs) // whatis / directory hints
+	s.enrichLastUsed(pkgs)     // shell-history invocation times
+	return pkgs, nil
+}
+
+// collectBinaries walks the given directories and returns every executable that
+// is not a shared library, de-duplicated by path.
+func collectBinaries(dirs []string) []binCandidate {
 	var cands []binCandidate
+	seen := make(map[string]bool)
 	for _, dir := range dirs {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -73,80 +94,31 @@ func (s BinScanner) Scan() ([]store.Package, error) {
 			cands = append(cands, binCandidate{dir: dir, name: entry.Name(), path: path, info: info})
 		}
 	}
+	return cands
+}
 
-	// Resolve which candidates a package manager owns directly (one bulk query).
-	paths := make([]string, len(cands))
-	for i, c := range cands {
-		paths[i] = c.path
+// toPackage builds the store.Package for an unmanaged binary.
+func (c binCandidate) toPackage() store.Package {
+	owner := pkg.FileOwner(c.dir)
+	if owner == "" {
+		owner = pkg.CurrentUser()
 	}
-	owned := managedPaths(paths)
-
-	// For the remainder, resolve symlinks so that update-alternatives links
-	// (e.g. /usr/bin/awk -> /usr/bin/mawk) and store payloads are recognised as
-	// managed via their real target.
-	type survivor struct {
-		c    binCandidate
-		real string
+	source := "bin"
+	if strings.Contains(c.dir, ".nvm") {
+		source = "npm"
 	}
-	var survivors []survivor
-	var realPaths []string
-	for _, c := range cands {
-		if ownedAny(owned, c.path) {
-			continue // owned by dpkg/pacman/rpm
-		}
-		real, err := filepath.EvalSymlinks(c.path)
-		if err != nil {
-			real = c.path
-		}
-		if isStoreManaged(real) {
-			continue // Homebrew/Nix/snap payload
-		}
-		survivors = append(survivors, survivor{c, real})
-		if real != c.path {
-			realPaths = append(realPaths, real)
-		}
+	sz := c.info.Size()
+	mt := c.info.ModTime()
+	return store.Package{
+		Name:      c.name,
+		Source:    source,
+		Location:  c.dir,
+		UpdatedAt: time.Now(),
+		User:      owner,
+		SizeBytes: &sz,
+		LastUsed:  pkg.GetLastUsed(c.path),
+		AddedAt:   &mt,
 	}
-	ownedReal := managedPaths(realPaths)
-
-	// Pass 2: keep only genuinely unmanaged binaries.
-	var pkgs []store.Package
-	for _, sv := range survivors {
-		if sv.real != sv.c.path && ownedAny(ownedReal, sv.real) {
-			continue // alternatives symlink to a managed binary
-		}
-		c := sv.c
-
-		owner := pkg.FileOwner(c.dir)
-		if owner == "" {
-			owner = pkg.CurrentUser()
-		}
-		source := "bin"
-		if strings.Contains(c.dir, ".nvm") {
-			source = "npm"
-		}
-
-		p := store.Package{
-			Name:      c.name,
-			Source:    source,
-			Location:  c.dir,
-			UpdatedAt: time.Now(),
-			User:      owner,
-		}
-		sz := c.info.Size()
-		p.SizeBytes = &sz
-		p.LastUsed = pkg.GetLastUsed(c.path)
-		mt := c.info.ModTime()
-		p.AddedAt = &mt
-		pkgs = append(pkgs, p)
-	}
-
-	// Post-process: enrich descriptions
-	s.enrichDescriptions(pkgs)
-
-	// Cross-reference with shell history for reliable last-used timestamps
-	s.enrichLastUsed(pkgs)
-
-	return pkgs, nil
 }
 
 // enrichDescriptions populates descriptions for bin packages.

@@ -2,7 +2,6 @@ package scanner
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -14,10 +13,8 @@ import (
 // goModCache returns Go's module cache, asking the go tool first and falling
 // back to GOMODCACHE / GOPATH / the default ~/go/pkg/mod.
 func goModCache() string {
-	if out, err := exec.Command("go", "env", "GOMODCACHE").Output(); err == nil {
-		if d := strings.TrimSpace(string(out)); d != "" {
-			return d
-		}
+	if d := cmdLine("go", "env", "GOMODCACHE"); d != "" {
+		return d
 	}
 	if d := os.Getenv("GOMODCACHE"); d != "" {
 		return d

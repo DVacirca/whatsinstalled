@@ -28,9 +28,9 @@ func (s BrewScanner) Scan() ([]store.Package, error) {
 	}
 
 	// Determine brew prefix for location and owner
-	brewPrefix := "/home/linuxbrew/.linuxbrew"
-	if prefixOut, err := exec.Command("brew", "--prefix").Output(); err == nil {
-		brewPrefix = strings.TrimSpace(string(prefixOut))
+	brewPrefix := cmdLine("brew", "--prefix")
+	if brewPrefix == "" {
+		brewPrefix = "/home/linuxbrew/.linuxbrew"
 	}
 	owner := pkg.FileOwner(brewPrefix)
 

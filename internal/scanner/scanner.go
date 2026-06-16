@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"os/exec"
+	"strings"
 
 	"whatsinstalled/internal/store"
 )
@@ -10,6 +11,16 @@ import (
 func commandExists(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
+}
+
+// cmdLine runs a command and returns its trimmed stdout, or "" on error or
+// empty output. Handy for "ask the tool where it lives" lookups.
+func cmdLine(name string, args ...string) string {
+	out, err := exec.Command(name, args...).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // Scanner discovers packages from a package manager.

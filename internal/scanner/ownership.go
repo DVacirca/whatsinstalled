@@ -2,8 +2,40 @@ package scanner
 
 import (
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
+
+// managedSet returns the subset of the given paths that a package manager
+// effectively owns: directly (dpkg/pacman/rpm, usr-merge aware), via a symlink
+// target such as an update-alternatives link, or as a Homebrew/Nix/snap store
+// payload. Symlinks are resolved once and both spellings go into a single bulk
+// ownership query.
+func managedSet(paths []string) map[string]bool {
+	real := make(map[string]string, len(paths))
+	query := make([]string, 0, len(paths))
+	for _, p := range paths {
+		query = append(query, p)
+		r, err := filepath.EvalSymlinks(p)
+		if err != nil {
+			r = p
+		}
+		real[p] = r
+		if r != p {
+			query = append(query, r)
+		}
+	}
+	owned := managedPaths(query)
+
+	managed := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		r := real[p]
+		if isStoreManaged(r) || ownedAny(owned, p) || ownedAny(owned, r) {
+			managed[p] = true
+		}
+	}
+	return managed
+}
 
 // storeMarkers are path fragments that mark a binary as managed by a package
 // manager whose payloads live in a content-addressed store. The loose-binary
