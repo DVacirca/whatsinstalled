@@ -3,10 +3,31 @@ name: Build
 on:
   push:
     branches: [master]
-    tags: ["v*"]
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      is_new: ${{ steps.read.outputs.is_new }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read version and check if it is new
+        id: read
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=$(grep -oP 'Version = "\K[^"]+' internal/version/version.go)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if gh release view "$v" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "is_new=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Release $v already exists — skipping release (bump Version in internal/version/version.go to cut a new one)."
+          else
+            echo "is_new=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    needs: version
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -24,18 +45,19 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
           ext=""
           if [ "$GOOS" = "windows" ]; then ext=".exe"; fi
-          go build -o "whatsinstalled-${GOOS}-${GOARCH}${ext}" ./cmd/whatsinstalled
+          go build -o "whatsinstalled-${VERSION}-${GOOS}-${GOARCH}${ext}" ./cmd/whatsinstalled
       - uses: actions/upload-artifact@v4
         with:
           name: whatsinstalled-${{ matrix.goos }}-${{ matrix.goarch }}
           path: whatsinstalled-*
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [version, build]
+    if: needs.version.outputs.is_new == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -45,4 +67,6 @@ jobs:
           path: artifacts
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.version.outputs.version }}
+          name: ${{ needs.version.outputs.version }}
           files: artifacts/**/*
