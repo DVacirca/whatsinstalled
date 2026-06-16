@@ -15,6 +15,21 @@ whatsinstalled            # launch the TUI dashboard
 whatsinstalled scan       # rescan and print a per-source summary
 ```
 
+## Features
+
+- **One unified inventory** across 22 sources — OS package managers, language
+  ecosystems, containers, and loose binaries — with empty sources auto-hidden.
+- **Rich per-package facts** — source, location, owner, on-disk size, added /
+  last-used timestamps, and an auto-installed-dependency marker (`↳`).
+- **Interactive TUI** — tree view grouped by location, per-source tabs, live
+  name filter, details pane, 7 themes, command palette.
+- **Natural-language search** — ask _"which python tools do I have?"_; answered by
+  a local MiniLM embedding model with substring fallback, never hits the network
+  at query time (experimental).
+- **Read-only & offline-first** — never installs or removes anything; all state
+  lives in a local SQLite DB. Enrichment/embedding are pre-computed at init so
+  search can't hang.
+
 ## What it detects
 
 `whatsinstalled` auto-detects the sources below. A source only shows up when its tool
