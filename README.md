@@ -1,14 +1,8 @@
 # whatsinstalled
 
-A CLI/TUI that gives you one consolidated view of everything installed on your
-system — across every package manager, language ecosystem, and loose binaries —
-so the graveyard of tools you've accumulated stops being invisible.
-
-For each package it shows the **source** it came from, **where** it lives, **who**
-installed it, its **on-disk size**, and when it was **added** / **last used**
-(size, added and used are filled in where they can be measured reliably). It also answers natural-language
-questions like _"which python tools do I have?"_ via a small local LLM
-(experimental).
+One consolidated view of everything installed on your machine — every package
+manager, language ecosystem, and loose binary — so the tools you've accumulated
+stop being invisible.
 
 ```
 whatsinstalled            # launch the TUI dashboard
@@ -17,77 +11,65 @@ whatsinstalled scan       # rescan and print a per-source summary
 
 ## Features
 
-- **One unified inventory** across 22 sources — OS package managers, language
-  ecosystems, containers, and loose binaries — with empty sources auto-hidden.
-- **Rich per-package facts** — source, location, owner, on-disk size, added /
-  last-used timestamps, and an auto-installed-dependency marker (`↳`).
-- **Interactive TUI** — tree view grouped by location, per-source tabs, live
-  name filter, details pane, 7 themes, command palette.
-- **Natural-language search** — ask _"which python tools do I have?"_; answered by
-  a local MiniLM embedding model with substring fallback, never hits the network
-  at query time (experimental).
-- **Read-only & offline-first** — never installs or removes anything; all state
-  lives in a local SQLite DB. Enrichment/embedding are pre-computed at init so
-  search can't hang.
+| | |
+|---|---|
+| **Unified inventory** | 22 sources in one view — OS managers, language ecosystems, containers, loose binaries. Empty sources auto-hide. |
+| **Rich per-package facts** | Source, location, owner, on-disk size, added / last-used, and a dependency marker (`↳`). |
+| **Interactive TUI** | Tree grouped by location, per-source tabs, live filter, details pane, 7 themes, command palette. |
+| **Natural-language search** | Ask _"which python tools do I have?"_ — local MiniLM embeddings with substring fallback, zero network at query time. _(experimental)_ |
+| **Read-only & offline** | Never installs or removes. State lives in local SQLite; enrichment and embedding are pre-computed at init so search can't hang. |
 
 ## What it detects
 
-`whatsinstalled` auto-detects the sources below. A source only shows up when its tool
-is installed **and** it actually has packages — the dashboard tabs are rendered
-dynamically per machine, so you never see empty tabs.
+A source appears only when its tool is installed **and** actually has packages,
+so you never see empty tabs.
 
-### System / OS package managers
+### System / OS
 | Source | Detects |
 |---|---|
-| **apt** | Installed dpkg packages. Dependency packages are hidden by default — press `a` to show them. |
+| **apt** | dpkg packages (dependencies hidden by default — press `a` to show) |
 | **snap** | Snap packages |
 | **flatpak** | Flatpak packages |
 | **brew** | Homebrew packages |
 | **nix** | nix-env packages |
-| **pacman** | Arch pacman packages |
+| **pacman** | Arch packages |
 | **yay** | AUR packages |
 
-### Language / ecosystem package managers
+### Language ecosystems
 | Source | Detects | Where it looks |
 |---|---|---|
-| **npm** | Top-level npm packages | Global + any `package.json` project under `~/*` and the current dir |
-| **pnpm** | Global pnpm packages | `pnpm ls -g` |
-| **yarn** | Global yarn (v1) packages | `yarn global list` |
-| **pip** | Top-level pip packages | System Python + `.venv`/`venv`/`env` virtualenvs under `~/*` (read from package metadata) |
-| **pipx** | Isolated Python CLI apps | `~/.local/share/pipx/venvs` |
-| **uv** | `uv tool install` CLI tools | `~/.local/share/uv/tools` |
-| **conda** | Packages per environment | All conda environments |
-| **pixi** | pixi global environments | pixi global install area |
+| **npm** | top-level packages | global + `package.json` projects under `~/*` |
+| **pnpm** | global packages | `pnpm ls -g` |
+| **yarn** | global (v1) packages | `yarn global list` |
+| **pip** | top-level packages | system Python + venvs under `~/*` |
+| **pipx** | isolated CLI apps | `~/.local/share/pipx/venvs` |
+| **uv** | `uv tool` CLIs | `~/.local/share/uv/tools` |
+| **conda** | per-environment packages | all conda environments |
+| **pixi** | global environments | pixi global area |
 | **gem** | RubyGems | `gem list --local` |
-| **cargo** | Cargo-installed Rust binaries | `~/.cargo/bin` |
-| **go** | Downloaded Go modules | `~/go/pkg/mod` |
+| **cargo** | Rust binaries | `~/.cargo/bin` |
+| **go** | Go modules | `~/go/pkg/mod` |
 
 ### Containers & loose files
 | Source | Detects |
 |---|---|
-| **docker** | Local Docker images |
-| **podman** | Local Podman images |
-| **appimage** | Portable `*.AppImage` apps in `~/Applications`, `~/Downloads`, `~/.local/bin`, `/opt` — tracked by no package manager |
-| **bin** | Manually-installed binaries in `~/.local/bin`, `~/bin`, `~/go/bin`, `~/.cargo/bin`, `~/.yarn/bin`, `~/.npm-global/bin`, version-manager shims, `/usr/local/bin`, `/usr/bin` |
+| **docker** | local images |
+| **podman** | local images |
+| **appimage** | `*.AppImage` in `~/Applications`, `~/Downloads`, `~/.local/bin`, `/opt` |
+| **bin** | manual binaries in `~/.local/bin`, `~/bin`, `~/go/bin`, version-manager shims, `/usr/local/bin`, `/usr/bin` |
 
-> Tuned for Debian/Ubuntu (incl. WSL). Tools that don't apply to your machine are
-> simply skipped.
+> Tuned for Debian/Ubuntu (incl. WSL). Tools that don't apply to your machine are skipped.
 
 ## Key bindings (TUI)
 
-| Key | Action |
-|---|---|
-| `↑↓` / `jk` | Navigate |
-| `←→` / `hl` | Expand / collapse |
-| `Tab` | Switch source |
-| `/` | Filter by name |
-| `a` | Show / hide auto-installed dependencies |
-| `?` | Natural-language search (experimental) |
-| `:` | Command palette |
-| `t` | Switch theme |
-| `d` | Details |
-| `r` | Rescan |
-| `q` | Quit |
+| Key | Action | Key | Action |
+|---|---|---|---|
+| `↑↓` / `jk` | Navigate | `:` | Command palette |
+| `←→` / `hl` | Expand / collapse | `t` | Switch theme |
+| `Tab` | Switch source | `d` | Details |
+| `/` | Filter by name | `r` | Rescan |
+| `a` | Toggle dependencies | `q` | Quit |
+| `?` | Natural-language search | | |
 
 ## Build
 
@@ -95,4 +77,5 @@ dynamically per machine, so you never see empty tabs.
 go build -o whatsinstalled ./cmd/whatsinstalled
 ```
 
-Requires Go 1.25+. State is stored in a local SQLite database.
+Requires Go 1.25+. State is stored in a local SQLite database. See
+[ARCHITECTURE.md](ARCHITECTURE.md) for internals.
