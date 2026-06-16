@@ -20,7 +20,7 @@ type BinScanner struct{}
 func (BinScanner) Name() string      { return "bin" }
 func (BinScanner) IsAvailable() bool { return true }
 func (s BinScanner) Probe() bool {
-	dirs := s.discoverDirs()
+	dirs := discoverBinDirs()
 	for _, dir := range dirs {
 		entries, _ := os.ReadDir(dir)
 		for _, e := range entries {
@@ -36,12 +36,19 @@ func (s BinScanner) Probe() bool {
 	return false
 }
 
-func (s BinScanner) Scan() ([]store.Package, error) {
-	var pkgs []store.Package
+// binCandidate is one executable found during the directory walk, kept until
+// package-manager ownership has been resolved.
+type binCandidate struct {
+	dir, name, path string
+	info            os.FileInfo
+}
 
-	dirs := s.discoverDirs()
+func (s BinScanner) Scan() ([]store.Package, error) {
+	dirs := discoverBinDirs()
 	seen := make(map[string]bool)
 
+	// Pass 1: collect every executable so ownership can be resolved in bulk.
+	var cands []binCandidate
 	for _, dir := range dirs {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -52,44 +59,85 @@ func (s BinScanner) Scan() ([]store.Package, error) {
 				continue
 			}
 			info, err := entry.Info()
-			if err != nil {
+			if err != nil || info.Mode()&0o111 == 0 {
+				continue // not executable
+			}
+			if isLibraryFile(entry.Name()) {
+				continue // shared library / object file, not a command
+			}
+			path := filepath.Join(dir, entry.Name())
+			if seen[path] {
 				continue
 			}
-			// Skip if not executable
-			if info.Mode()&0o111 == 0 {
-				continue
-			}
-			name := entry.Name()
-			key := dir + "/" + name
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-
-			owner := pkg.FileOwner(dir)
-			if owner == "" {
-				owner = pkg.CurrentUser()
-			}
-
-			source := "bin"
-			if strings.Contains(dir, ".nvm") {
-				source = "npm"
-			}
-
-			p := store.Package{
-				Name:      name,
-				Source:    source,
-				Location:  dir,
-				UpdatedAt: time.Now(),
-				User:      owner,
-			}
-			sz := info.Size()
-			p.SizeBytes = &sz
-			p.LastUsed = pkg.GetLastUsed(filepath.Join(dir, name))
-			mt := info.ModTime()
-			p.AddedAt = &mt
-			pkgs = append(pkgs, p)
+			seen[path] = true
+			cands = append(cands, binCandidate{dir: dir, name: entry.Name(), path: path, info: info})
 		}
+	}
+
+	// Resolve which candidates a package manager owns directly (one bulk query).
+	paths := make([]string, len(cands))
+	for i, c := range cands {
+		paths[i] = c.path
+	}
+	owned := managedPaths(paths)
+
+	// For the remainder, resolve symlinks so that update-alternatives links
+	// (e.g. /usr/bin/awk -> /usr/bin/mawk) and store payloads are recognised as
+	// managed via their real target.
+	type survivor struct {
+		c    binCandidate
+		real string
+	}
+	var survivors []survivor
+	var realPaths []string
+	for _, c := range cands {
+		if ownedAny(owned, c.path) {
+			continue // owned by dpkg/pacman/rpm
+		}
+		real, err := filepath.EvalSymlinks(c.path)
+		if err != nil {
+			real = c.path
+		}
+		if isStoreManaged(real) {
+			continue // Homebrew/Nix/snap payload
+		}
+		survivors = append(survivors, survivor{c, real})
+		if real != c.path {
+			realPaths = append(realPaths, real)
+		}
+	}
+	ownedReal := managedPaths(realPaths)
+
+	// Pass 2: keep only genuinely unmanaged binaries.
+	var pkgs []store.Package
+	for _, sv := range survivors {
+		if sv.real != sv.c.path && ownedAny(ownedReal, sv.real) {
+			continue // alternatives symlink to a managed binary
+		}
+		c := sv.c
+
+		owner := pkg.FileOwner(c.dir)
+		if owner == "" {
+			owner = pkg.CurrentUser()
+		}
+		source := "bin"
+		if strings.Contains(c.dir, ".nvm") {
+			source = "npm"
+		}
+
+		p := store.Package{
+			Name:      c.name,
+			Source:    source,
+			Location:  c.dir,
+			UpdatedAt: time.Now(),
+			User:      owner,
+		}
+		sz := c.info.Size()
+		p.SizeBytes = &sz
+		p.LastUsed = pkg.GetLastUsed(c.path)
+		mt := c.info.ModTime()
+		p.AddedAt = &mt
+		pkgs = append(pkgs, p)
 	}
 
 	// Post-process: enrich descriptions
@@ -201,74 +249,6 @@ func (s BinScanner) whatisBatch(names []string) map[string]string {
 		}
 	}
 	return results
-}
-
-// helpFallback tries --help for a small sample of packages without descriptions.
-func (s BinScanner) discoverDirs() []string {
-	var dirs []string
-	seen := make(map[string]bool)
-
-	// Common user bin directories
-	candidates := []string{
-		"~/.local/bin",
-		"~/bin",
-		"~/go/bin",
-		"~/.cargo/bin",
-		"~/.yarn/bin",
-		"~/.npm-global/bin",
-		"~/.nvm/versions/node/*/bin",
-		"~/.rbenv/shims",
-		"~/.pyenv/shims",
-		"/usr/local/bin",
-		"/usr/bin",
-	}
-
-	home := pkg.HomeDir()
-	for _, c := range candidates {
-		if strings.HasPrefix(c, "~/") {
-			c = filepath.Join(home, strings.TrimPrefix(c, "~/"))
-		}
-		if strings.Contains(c, "*") {
-			matches, _ := filepath.Glob(c)
-			for _, m := range matches {
-				if !seen[m] {
-					seen[m] = true
-					if info, err := os.Stat(m); err == nil && info.IsDir() {
-						dirs = append(dirs, m)
-					}
-				}
-			}
-			continue
-		}
-		if info, err := os.Stat(c); err == nil && info.IsDir() {
-			if !seen[c] {
-				seen[c] = true
-				dirs = append(dirs, c)
-			}
-		}
-	}
-
-	// Also scan PATH directories under home (to catch custom dirs)
-	path := os.Getenv("PATH")
-	for _, dir := range strings.Split(path, ":") {
-		if dir == "" {
-			continue
-		}
-		if !strings.HasPrefix(dir, home) {
-			continue // Skip system dirs covered by apt/snap
-		}
-		if strings.Contains(dir, "apt") || strings.Contains(dir, "snap") {
-			continue // Skip package manager dirs
-		}
-		if !seen[dir] {
-			if info, err := os.Stat(dir); err == nil && info.IsDir() {
-				seen[dir] = true
-				dirs = append(dirs, dir)
-			}
-		}
-	}
-
-	return dirs
 }
 
 var _ Scanner = BinScanner{}

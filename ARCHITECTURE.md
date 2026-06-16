@@ -18,38 +18,40 @@ to a single in-memory vector ranking.
 
 ## Data Flow
 
-SQLite is the hub: every stage reads from and writes back to it. Everything left
-of `search.Rank` is pre-computation that runs only at init.
+SQLite is the hub: every stage reads from and writes back to it. The init
+pipeline pre-computes everything, so a query never triggers a generative call —
+it reduces to encode + in-memory rank.
 
 ```mermaid
-flowchart LR
-    subgraph init["Init pipeline · precompute"]
-        SCAN["Scan<br/>22 managers"]
-        ENRICH["Enrich<br/>local + registries"]
-        EMBED["Embed<br/>MiniLM · 384-dim"]
+sequenceDiagram
+    actor U as User
+    participant T as TUI
+    participant Sc as Scanners
+    participant En as Enrich
+    participant Em as Embed
+    participant DB as SQLite
+    participant Se as search.Rank
+
+    rect rgb(238, 244, 252)
+    note over T, DB: Init pipeline — precompute on startup / rescan
+    T->>Sc: discover + scan
+    Sc->>DB: upsert + purge stale
+    T->>En: describe new packages
+    En->>DB: write descriptions
+    T->>Em: embed packages without vectors
+    Em->>DB: write 384-dim vectors
     end
 
-    STORE[("SQLite<br/>packages + cache")]
-
-    subgraph run["Runtime"]
-        SEARCH["search.Rank<br/>cosine · TopK 50"]
-        TUI["TUI<br/>Bubble Tea"]
+    rect rgb(245, 240, 250)
+    note over U, Se: Query — no generative call
+    U->>T: ? "which python tools?"
+    T->>Em: encode(query)
+    Em-->>T: query vector
+    DB-->>T: vectors (ListWithEmbeddings)
+    T->>Se: rank(queryVec, packages)
+    Se-->>T: top results
+    T-->>U: ranked list
     end
-
-    EVAL["Eval<br/>MRR · Hit@k"]
-
-    SCAN -->|upsert| STORE
-    STORE -->|no description| ENRICH
-    ENRICH --> STORE
-    STORE -->|no vector| EMBED
-    EMBED --> STORE
-    STORE -->|vectors| SEARCH
-    EMBED -->|query vector| SEARCH
-    SEARCH -->|results| TUI
-    SEARCH <-->|shared Rank| EVAL
-
-    classDef store fill:#5b3a00,stroke:#f59e0b,color:#fff7ed,stroke-width:2px
-    class STORE store
 ```
 
 ---
@@ -61,7 +63,7 @@ flowchart LR
 | `cmd/whatsinstalled` | Binary entrypoint |
 | `cmd/enrich` | One-off enrichment backfill helper |
 | `internal/cmd` | Cobra commands — root (TUI), `scan`, `eval` |
-| `internal/scanner` | One file per manager (22); `Scanner` interface + discovery registry |
+| `internal/scanner` | One file per manager (22); `Scanner` interface + registry; shared `bindirs.go` (bin enumeration) and `ownership.go` (package-manager ownership filter) |
 | `internal/store` | SQLite persistence — `Package`, CRUD, migrations, `PurgeStale` |
 | `internal/enrich` | Descriptions — local tools, remote registries, 30-day cache |
 | `internal/nlp` | MiniLM embedder, query expansion, keyword scoring |
@@ -319,5 +321,5 @@ metadata at init and feeds it into the existing embedding path, preserving the
 | **Search scaling** | Every query loads *all* vectors and scores in memory; stored as JSON text. Fine for thousands, not millions. | On-disk / quantized vector index behind the unchanged `Rank` contract. |
 | **Usage signal** | `Used` from atime + shell history (CLI only); deps cover apt + pip + conda. | Last-used for libraries; extend dependency detection to npm/brew/cargo. |
 | **Temporal view** | Point-in-time snapshot, no history. | Optional snapshots and diffs, staying read-only. |
-| **Portability** | Tuned for Debian/Ubuntu and WSL. | Broaden scanner coverage; add cross-distro CI. |
+| **Portability** | Path-driven scanners (bin/uv/go/pipx) are env-var-aware and resolve dirs via the tool itself (`go env`, `uv tool dir`, `pipx environment`); `bin` enumerates all common *nix dirs and filters package-manager-owned binaries (dpkg/pacman/rpm + Homebrew/Nix/snap, usr-merge aware). macOS works; not yet exercised in CI. | Add cross-distro / macOS CI; per-distro ownership coverage beyond dpkg. |
 | **Model bootstrap** | ~177 MB download; silent degrade to substring if absent. | Smaller/quantized model option; surface degraded mode in the UI. |

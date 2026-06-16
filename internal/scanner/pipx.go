@@ -5,15 +5,26 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"whatsinstalled/internal/pkg"
 	"whatsinstalled/internal/store"
 )
 
-// pipxVenvsDir returns the directory holding pipx's per-app virtualenvs.
+// pipxVenvsDir returns the directory holding pipx's per-app virtualenvs,
+// preferring pipx's own answer and falling back to PIPX_HOME / the platform
+// data dir.
 func pipxVenvsDir() string {
-	return filepath.Join(pkg.HomeDir(), ".local", "share", "pipx", "venvs")
+	if out, err := exec.Command("pipx", "environment", "--value", "PIPX_LOCAL_VENVS").Output(); err == nil {
+		if d := strings.TrimSpace(string(out)); d != "" {
+			return d
+		}
+	}
+	if d := os.Getenv("PIPX_HOME"); d != "" {
+		return filepath.Join(d, "venvs")
+	}
+	return filepath.Join(userDataDir(), "pipx", "venvs")
 }
 
 // PipxScanner scans pipx-installed Python CLI applications (one isolated venv each).

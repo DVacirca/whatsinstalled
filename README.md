@@ -56,7 +56,7 @@ so you never see empty tabs.
 | **docker** | local images |
 | **podman** | local images |
 | **appimage** | `*.AppImage` in `~/Applications`, `~/Downloads`, `~/.local/bin`, `/opt` |
-| **bin** | manual binaries in `~/.local/bin`, `~/bin`, `~/go/bin`, version-manager shims, `/usr/local/bin`, `/usr/bin` |
+| **bin** | unmanaged binaries across all common *nix bin dirs — `~/.local/bin`, `~/.cargo/bin`, version-manager shims, `$PATH`, `/usr/local/bin`, `/usr/bin`, `/opt/homebrew/bin`, … Binaries owned by a package manager are excluded. |
 
 > Tuned for Debian/Ubuntu (incl. WSL). Tools that don't apply to your machine are skipped.
 

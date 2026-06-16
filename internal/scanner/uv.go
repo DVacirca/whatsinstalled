@@ -11,9 +11,18 @@ import (
 	"whatsinstalled/internal/store"
 )
 
-// uvToolsDir returns the directory holding uv's installed tools.
+// uvToolsDir returns the directory holding uv's installed tools, preferring
+// uv's own answer and falling back to UV_TOOL_DIR / the platform data dir.
 func uvToolsDir() string {
-	return filepath.Join(pkg.HomeDir(), ".local", "share", "uv", "tools")
+	if out, err := exec.Command("uv", "tool", "dir").Output(); err == nil {
+		if d := strings.TrimSpace(string(out)); d != "" {
+			return d
+		}
+	}
+	if d := os.Getenv("UV_TOOL_DIR"); d != "" {
+		return d
+	}
+	return filepath.Join(userDataDir(), "uv", "tools")
 }
 
 // UvScanner scans CLI tools installed via `uv tool install`.

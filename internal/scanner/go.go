@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -10,13 +11,30 @@ import (
 	"whatsinstalled/internal/store"
 )
 
+// goModCache returns Go's module cache, asking the go tool first and falling
+// back to GOMODCACHE / GOPATH / the default ~/go/pkg/mod.
+func goModCache() string {
+	if out, err := exec.Command("go", "env", "GOMODCACHE").Output(); err == nil {
+		if d := strings.TrimSpace(string(out)); d != "" {
+			return d
+		}
+	}
+	if d := os.Getenv("GOMODCACHE"); d != "" {
+		return d
+	}
+	if gp := filepath.SplitList(os.Getenv("GOPATH")); len(gp) > 0 && gp[0] != "" {
+		return filepath.Join(gp[0], "pkg", "mod")
+	}
+	return filepath.Join(pkg.HomeDir(), "go", "pkg", "mod")
+}
+
 // GoScanner scans downloaded Go modules in the module cache.
 type GoScanner struct{}
 
 func (GoScanner) Name() string      { return "go" }
 func (GoScanner) IsAvailable() bool { return commandExists("go") }
 func (s GoScanner) Probe() bool {
-	modCache := filepath.Join(pkg.HomeDir(), "go", "pkg", "mod")
+	modCache := goModCache()
 	entries, _ := os.ReadDir(modCache)
 	for _, e := range entries {
 		if e.IsDir() && strings.Contains(e.Name(), "@") {
@@ -27,7 +45,7 @@ func (s GoScanner) Probe() bool {
 }
 
 func (s GoScanner) Scan() ([]store.Package, error) {
-	modCache := filepath.Join(pkg.HomeDir(), "go", "pkg", "mod")
+	modCache := goModCache()
 	if _, err := os.Stat(modCache); err != nil {
 		return nil, nil // no go module cache
 	}
