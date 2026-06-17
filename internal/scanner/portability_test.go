@@ -168,7 +168,7 @@ func TestParsePipLocation(t *testing.T) {
 	}
 }
 
-func TestDeriveAptLocation(t *testing.T) {
+func TestDeriveInstallDir(t *testing.T) {
 	cases := []struct {
 		name  string
 		lines []string
@@ -177,13 +177,45 @@ func TestDeriveAptLocation(t *testing.T) {
 		{"binary package", []string{"/usr", "/usr/bin", "/usr/bin/git", "/usr/bin/scalar", "/usr/share/doc/git/copyright"}, "/usr/bin"},
 		{"bindir priority", []string{"/usr/sbin", "/usr/sbin/foo", "/usr/bin", "/usr/bin/foo"}, "/usr/bin"},
 		{"shared library", []string{"/usr/lib/x86_64-linux-gnu", "/usr/lib/x86_64-linux-gnu/libssl.so.3"}, "/usr/lib/x86_64-linux-gnu"},
-		{"doc-only falls back", []string{"/usr/share/doc/foo", "/usr/share/doc/foo/copyright"}, "/var/lib/dpkg"},
-		{"empty manifest", nil, "/var/lib/dpkg"},
+		{"doc-only falls back", []string{"/usr/share/doc/foo", "/usr/share/doc/foo/copyright"}, "FB"},
+		{"empty manifest", nil, "FB"},
 	}
 	for _, tc := range cases {
-		if got := deriveAptLocation(tc.lines); got != tc.want {
-			t.Errorf("%s: deriveAptLocation = %q, want %q", tc.name, got, tc.want)
+		if got := deriveInstallDir(tc.lines, "FB"); got != tc.want {
+			t.Errorf("%s: deriveInstallDir = %q, want %q", tc.name, got, tc.want)
 		}
+	}
+}
+
+func TestParsePacmanFiles(t *testing.T) {
+	content := "%FILES%\nusr/\nusr/bin/\nusr/bin/pacman\nusr/lib/\nusr/lib/libalpm.so\n\n%BACKUP%\netc/pacman.conf\t0a1b2c\n"
+	got := parsePacmanFiles(content)
+	want := []string{"/usr", "/usr/bin", "/usr/bin/pacman", "/usr/lib", "/usr/lib/libalpm.so"}
+	if len(got) != len(want) {
+		t.Fatalf("parsePacmanFiles = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("line %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+	// %BACKUP% entries must be excluded.
+	for _, p := range got {
+		if strings.HasPrefix(p, "/etc") {
+			t.Errorf("backup entry leaked: %q", p)
+		}
+	}
+	if loc := deriveInstallDir(parsePacmanFiles(content), "/var/lib/pacman"); loc != "/usr/bin" {
+		t.Errorf("derived location = %q, want /usr/bin", loc)
+	}
+}
+
+func TestFlatpakAppDir(t *testing.T) {
+	if d := flatpakAppDir("org.gimp.GIMP", "system"); d != "/var/lib/flatpak/app/org.gimp.GIMP" {
+		t.Errorf("system app dir = %q", d)
+	}
+	if d := flatpakAppDir("org.gimp.GIMP", "user"); !strings.HasSuffix(d, "/.local/share/flatpak/app/org.gimp.GIMP") {
+		t.Errorf("user app dir = %q", d)
 	}
 }
 

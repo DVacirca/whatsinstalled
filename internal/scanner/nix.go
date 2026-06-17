@@ -3,6 +3,7 @@ package scanner
 import (
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -27,6 +28,9 @@ func (s NixScanner) Scan() ([]store.Package, error) {
 		return nil, fmt.Errorf("nix-env -q: %w", err)
 	}
 
+	// nix-env installs into the user's profile (a symlink tree into /nix/store).
+	location := filepath.Join(pkg.HomeDir(), ".nix-profile")
+
 	var pkgs []store.Package
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 	for _, line := range lines {
@@ -46,9 +50,9 @@ func (s NixScanner) Scan() ([]store.Package, error) {
 			Name:      fields[0],
 			Version:   ver,
 			Source:    "nix",
-			Location:  "/nix",
+			Location:  location,
 			UpdatedAt: time.Now(),
-			User:      pkg.FileOwner("/nix"),
+			User:      pkg.FileOwner(location),
 		})
 	}
 	return pkgs, nil

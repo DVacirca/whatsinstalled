@@ -24,10 +24,9 @@ func (s GemScanner) Scan() ([]store.Package, error) {
 	if err != nil {
 		return nil, nil
 	}
-	location := "system"
-	if dir, err := exec.Command("gem", "environment", "gemdir").Output(); err == nil {
-		location = strings.TrimSpace(string(dir))
-	}
+	// gemdir is the install root (e.g. /var/lib/gems/3.2.0); leave empty rather
+	// than invent a label if gem can't report it.
+	location := cmdLine("gem", "environment", "gemdir")
 	return parseGemList(string(out), location), nil
 }
 

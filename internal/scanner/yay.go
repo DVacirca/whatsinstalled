@@ -42,13 +42,14 @@ func (s YayScanner) Scan() ([]store.Package, error) {
 		if len(fields) > 1 {
 			ver = fields[1]
 		}
+		location := pacmanPackageLocation(fields[0], ver)
 		pkgs = append(pkgs, store.Package{
 			Name:      fields[0],
 			Version:   ver,
 			Source:    "yay",
-			Location:  "/var/lib/pacman",
+			Location:  location,
 			UpdatedAt: time.Now(),
-			User:      pkg.FileOwner("/var/lib/pacman"),
+			User:      pkg.FileOwner(location),
 		})
 	}
 	return pkgs, nil
