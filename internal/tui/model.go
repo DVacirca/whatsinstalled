@@ -53,12 +53,14 @@ type model struct {
 	// init / scan progress
 	scanning     bool
 	bgUpdating   bool                 // refreshing in the background: show the dashboard with a corner indicator instead of the splash
-	initStep     string               // "scan" | "enrich" | "embed" — shown during init
-	initProgress string               // current init message for the splash screen
-	initLogs     []string             // recent init progress lines for the splash screen
+	initStep     string               // "scan" | "enrich" | "embed" — active init phase
+	initProgress string               // current init message for the splash header
 	initCh       chan scanProgressMsg // channel polled for init progress
 	totalFound   int                  // packages found so far during the scan phase
-	scanSource   string               // scanner currently running
+	scanTotal    int                  // number of sources being scanned (denominator)
+	scanStatus   []scanEntry          // per-source state for the splash checklist
+	scanIndex    map[string]int       // source name -> index into scanStatus
+	scanSource   string               // scanner currently running (background indicator)
 	scanCount    int                  // packages found by the current scanner
 	enrichTotal  int                  // total packages to enrich (set by phase 2 header)
 	embedTotal   int                  // total packages to embed (set by phase 3 header)
@@ -99,6 +101,13 @@ type scanProgressMsg struct {
 	ch     chan scanProgressMsg
 }
 
+// scanEntry is one source's state in the splash scan checklist.
+type scanEntry struct {
+	name  string
+	count int
+	done  bool
+}
+
 // searchTimeoutMsg fires if a search has not completed within the deadline.
 type searchTimeoutMsg struct{}
 
@@ -128,7 +137,6 @@ func NewModel(s *store.Store) *model {
 		counts:           make(map[string]int),
 		hideAuto:         false,
 		scanning:         true,
-		initLogs:         []string{"Initializing..."},
 		availableSources: []string{""},
 		availableLabels:  []string{"All"},
 	}

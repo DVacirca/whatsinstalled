@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -277,97 +276,23 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case scanCompleteMsg:
-		m.scanning = false
-		m.bgUpdating = false
-		m.scanSource = ""
-		m.scanCount = 0
-		m.enrichTotal = 0
-		m.embedTotal = 0
-		m.initCh = nil
-		m.totalFound = 0
+		m.finishInit()
 		cmds = append(cmds, m.loadData)
 
 	case scanProgressMsg:
-		m.scanSource = msg.source
-		m.scanCount = msg.count
-		var progressMsg string
-
-		switch {
-		case msg.source == "enrich":
-			// Phase 2 header — the total we'll enrich (line 105 in commands.go).
-			m.enrichTotal = msg.count
-			m.initStep = "enrich"
-			progressMsg = fmt.Sprintf("Enriching descriptions... %d packages", msg.count)
-		case strings.HasPrefix(msg.source, "enrich:"):
-			// Per-source enrichment progress.  Count carries the number done.
-			m.initStep = "enrich"
-			src := strings.TrimPrefix(msg.source, "enrich:")
-			if m.enrichTotal > 0 {
-				progressMsg = fmt.Sprintf("Enriching %s... %d/%d packages", src, msg.count, m.enrichTotal)
-			} else {
-				progressMsg = fmt.Sprintf("Enriching %s... %d done", src, msg.count)
-			}
-		case msg.source == "embed":
-			// Both the phase-3 header (carries total) and per-package progress
-			// (carries index+1) use source "embed".  Distinguish by whether we
-			// already have a stored total.
-			m.initStep = "embed"
-			if m.embedTotal == 0 {
-				m.embedTotal = msg.count
-				progressMsg = fmt.Sprintf("Computing embeddings... %d packages", msg.count)
-			} else {
-				pct := float64(msg.count) / float64(m.embedTotal) * 100
-				progressMsg = fmt.Sprintf("Computing embeddings... %d/%d (%.0f%%)", msg.count, m.embedTotal, pct)
-			}
-		case msg.source != "":
-			m.initStep = "scan"
-			m.totalFound += msg.count
-			progressMsg = fmt.Sprintf("Scanning %s... %d found (%d total)", msg.source, msg.count, m.totalFound)
-		case msg.count > 0:
-			progressMsg = fmt.Sprintf("Using cached data... %d packages", msg.count)
-		default:
-			progressMsg = "Initializing..."
-		}
-		m.initProgress = progressMsg
-		// Deduplicate: replace the last log line if it shares a prefix, else append.
-		if len(m.initLogs) > 0 {
-			last := m.initLogs[len(m.initLogs)-1]
-			if strings.HasPrefix(last, "Enriching ") && strings.HasPrefix(progressMsg, "Enriching ") {
-				m.initLogs[len(m.initLogs)-1] = progressMsg
-			} else if strings.HasPrefix(last, "Scanning ") && strings.HasPrefix(progressMsg, "Scanning ") {
-				m.initLogs[len(m.initLogs)-1] = progressMsg
-			} else if strings.HasPrefix(last, "Computing ") && strings.HasPrefix(progressMsg, "Computing ") {
-				m.initLogs[len(m.initLogs)-1] = progressMsg
-			} else {
-				m.initLogs = append(m.initLogs, progressMsg)
-			}
-		} else {
-			m.initLogs = append(m.initLogs, progressMsg)
-		}
-		if len(m.initLogs) > 8 {
-			m.initLogs = m.initLogs[len(m.initLogs)-8:]
-		}
-		// The envelope message carries the channel to poll.
+		// The envelope message only carries the channel to poll.
 		if msg.ch != nil {
 			m.initCh = msg.ch
 			return m, pollScanProgressCmd(m.initCh)
 		}
-		// Keep polling while the scan runs.
-		if !msg.isDone && m.initCh != nil {
-			return m, pollScanProgressCmd(m.initCh)
-		}
+		m.applyProgress(msg)
 		if msg.isDone {
-			m.scanning = false
-			m.bgUpdating = false
-			m.scanSource = ""
-			m.scanCount = 0
-			m.enrichTotal = 0
-			m.embedTotal = 0
-			m.initStep = ""
-			m.initProgress = ""
-			m.initCh = nil
-			m.totalFound = 0
+			m.finishInit()
 			cmds = append(cmds, m.loadData)
+			return m, tea.Batch(cmds...)
+		}
+		if m.initCh != nil {
+			cmds = append(cmds, pollScanProgressCmd(m.initCh))
 		}
 		return m, tea.Batch(cmds...)
 

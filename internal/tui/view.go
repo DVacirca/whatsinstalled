@@ -19,23 +19,7 @@ func (m *model) View() string {
 
 	// Splash screen takes priority — show immediately during a foreground scan.
 	if m.scanning && !m.bgUpdating {
-		var splashLines []string
-		splashLines = append(splashLines, modalTitleStyle.Render("whatsinstalled"))
-		splashLines = append(splashLines, "")
-		splashLines = append(splashLines, lipgloss.NewStyle().Foreground(fgBright).Bold(true).Render(spinnerGlyph(m.spinnerFrame)+"  Updating packages"))
-		splashLines = append(splashLines, "")
-		logsToShow := m.initLogs
-		if len(logsToShow) == 0 {
-			logsToShow = []string{"Checking installed packages..."}
-		}
-		if len(logsToShow) > 6 {
-			logsToShow = logsToShow[len(logsToShow)-6:]
-		}
-		for _, logEntry := range logsToShow {
-			splashLines = append(splashLines, lipgloss.NewStyle().Foreground(fg).Render(logEntry))
-		}
-		splashContent := lipgloss.JoinVertical(lipgloss.Left, splashLines...)
-		splash := modalBorderStyle.Render(splashContent)
+		splash := m.renderSplash()
 		if m.width > 0 && m.height > 0 {
 			return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, splash)
 		}
@@ -280,4 +264,80 @@ func (m *model) viewSearchModal() string {
 	}
 	inputLines = append(inputLines, "", lipgloss.NewStyle().Foreground(fg).Render("Enter: search · Esc: cancel"))
 	return modalBorderStyle.Width(modalWidth).Render(lipgloss.JoinVertical(lipgloss.Left, inputLines...))
+}
+
+// renderSplash builds the init splash: a live phase header, the per-source scan
+// checklist, and a Scan ▸ Enrich ▸ Embed phase bar.
+func (m model) renderSplash() string {
+	header := m.initProgress
+	if header == "" {
+		header = "Initializing…"
+	}
+	lines := []string{
+		modalTitleStyle.Render("whatsinstalled"),
+		"",
+		lipgloss.NewStyle().Foreground(fgBright).Bold(true).Render(spinnerGlyph(m.spinnerFrame) + "  " + header),
+	}
+	if grid := m.renderScanGrid(); grid != "" {
+		lines = append(lines, "", grid)
+	}
+	lines = append(lines, "", m.renderPhaseBar())
+	return modalBorderStyle.Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+}
+
+// renderScanGrid lays out the scan checklist in columns: a check and package
+// count for finished sources, a spinner for those still running.
+func (m model) renderScanGrid() string {
+	if len(m.scanStatus) == 0 {
+		return ""
+	}
+	const (
+		cols  = 3
+		cellW = 16
+	)
+	doneStyle := lipgloss.NewStyle().Foreground(accent)
+	runStyle := lipgloss.NewStyle().Foreground(fgDim)
+
+	var cells []string
+	for _, e := range m.scanStatus {
+		text := runStyle.Render(spinnerGlyph(m.spinnerFrame) + " " + e.name)
+		if e.done {
+			text = doneStyle.Render(fmt.Sprintf("✓ %s %d", e.name, e.count))
+		}
+		cells = append(cells, lipgloss.NewStyle().Width(cellW).Render(text))
+	}
+	var rows []string
+	for i := 0; i < len(cells); i += cols {
+		end := i + cols
+		if end > len(cells) {
+			end = len(cells)
+		}
+		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, cells[i:end]...))
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, rows...)
+}
+
+// renderPhaseBar renders Scan ▸ Enrich ▸ Embed with completed phases checked
+// and the active phase highlighted.
+func (m model) renderPhaseBar() string {
+	phases := []struct{ key, label string }{
+		{"scan", "Scan"}, {"enrich", "Enrich"}, {"embed", "Embed"},
+	}
+	order := map[string]int{"scan": 0, "enrich": 1, "embed": 2}
+	cur := order[m.initStep]
+	active := lipgloss.NewStyle().Foreground(accent).Bold(true)
+	dim := lipgloss.NewStyle().Foreground(fgDim)
+
+	var parts []string
+	for i, p := range phases {
+		switch {
+		case i < cur:
+			parts = append(parts, dim.Render("✓ "+p.label))
+		case i == cur:
+			parts = append(parts, active.Render(p.label))
+		default:
+			parts = append(parts, dim.Render(p.label))
+		}
+	}
+	return strings.Join(parts, dim.Render(" ▸ "))
 }

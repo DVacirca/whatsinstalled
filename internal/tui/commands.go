@@ -68,6 +68,7 @@ func (m *model) fullInitWithProgress() tea.Msg {
 		// goroutines; DB writes stay sequential (single-writer SQLite). Upsert is
 		// incremental; PurgeStale drops packages that have been removed.
 		scanners := scanner.DiscoverScanners()
+		ch <- scanProgressMsg{source: "scan", count: len(scanners)}
 		cutoff := time.Now()
 		scanned := make([]struct {
 			pkgs []store.Package
