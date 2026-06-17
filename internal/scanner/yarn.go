@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -24,12 +25,16 @@ func (s YarnScanner) Scan() ([]store.Package, error) {
 	if err != nil {
 		return nil, nil
 	}
-	return parseYarnGlobalList(string(out)), nil
+	location := cmdLine("yarn", "global", "dir")
+	if location == "" {
+		location = filepath.Join(pkg.HomeDir(), ".config", "yarn", "global")
+	}
+	return parseYarnGlobalList(string(out), location), nil
 }
 
 // parseYarnGlobalList parses `yarn global list` output. Package lines look
 // like: info "left-pad@1.3.0" has binaries:
-func parseYarnGlobalList(out string) []store.Package {
+func parseYarnGlobalList(out, location string) []store.Package {
 	var pkgs []store.Package
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
@@ -51,7 +56,7 @@ func parseYarnGlobalList(out string) []store.Package {
 			Name:      spec[:at],
 			Version:   spec[at+1:],
 			Source:    "yarn",
-			Location:  "global",
+			Location:  location,
 			UpdatedAt: time.Now(),
 			User:      pkg.CurrentUser(),
 		})

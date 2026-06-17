@@ -32,9 +32,12 @@ func (GoScanner) Name() string      { return "go" }
 func (GoScanner) IsAvailable() bool { return commandExists("go") }
 func (s GoScanner) Probe() bool {
 	modCache := goModCache()
+	// The cache is laid out as <domain>/<org>/<repo>@<version>; the top level is
+	// domain directories (e.g. github.com), so detect those rather than looking
+	// for "@" at depth 0 (which never matches).
 	entries, _ := os.ReadDir(modCache)
 	for _, e := range entries {
-		if e.IsDir() && strings.Contains(e.Name(), "@") {
+		if e.IsDir() && strings.Contains(e.Name(), ".") {
 			return true
 		}
 	}
@@ -56,6 +59,11 @@ func (s GoScanner) Scan() ([]store.Package, error) {
 	_ = filepath.WalkDir(modCache, func(path string, d os.DirEntry, err error) error {
 		if err != nil || !d.IsDir() {
 			return nil
+		}
+		// Skip the download cache (zips/infos under cache/download/.../@v),
+		// which would otherwise surface as bogus "cache/download/..." modules.
+		if rel, _ := filepath.Rel(modCache, path); rel == "cache" {
+			return filepath.SkipDir
 		}
 		name := d.Name()
 		if !strings.Contains(name, "@") {
@@ -79,7 +87,7 @@ func (s GoScanner) Scan() ([]store.Package, error) {
 			Name:        modPath,
 			Version:     version,
 			Source:      "go",
-			Location:    "gomodcache",
+			Location:    modCache,
 			UpdatedAt:   time.Now(),
 			User:        pkg.FileOwner(path),
 			Description: "",

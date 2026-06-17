@@ -103,7 +103,7 @@ func (s PixiScanner) scanEnv(envPath, envName string) ([]store.Package, error) {
 			Name:        r.Name,
 			Version:     r.Version,
 			Source:      "pixi",
-			Location:    envName,
+			Location:    envPath,
 			UpdatedAt:   time.Now(),
 			User:        owner,
 			Description: r.Channel,

@@ -42,12 +42,15 @@ func TestParseYarnGlobalList(t *testing.T) {
 		"   - left-pad\n" +
 		"info \"@scope/tool@2.1.0\" has binaries:\n" +
 		"Done in 0.05s.\n"
-	pkgs := parseYarnGlobalList(out)
+	pkgs := parseYarnGlobalList(out, "/home/u/.config/yarn/global")
 	if len(pkgs) != 2 {
 		t.Fatalf("want 2 pkgs, got %d: %+v", len(pkgs), pkgs)
 	}
 	if pkgs[0].Name != "left-pad" || pkgs[0].Version != "1.3.0" {
 		t.Errorf("pkg[0] = %q %q", pkgs[0].Name, pkgs[0].Version)
+	}
+	if pkgs[0].Location != "/home/u/.config/yarn/global" {
+		t.Errorf("location = %q, want the resolved global dir", pkgs[0].Location)
 	}
 	if pkgs[1].Name != "@scope/tool" || pkgs[1].Version != "2.1.0" {
 		t.Errorf("pkg[1] = %q %q, want @scope/tool 2.1.0", pkgs[1].Name, pkgs[1].Version)
