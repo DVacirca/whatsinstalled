@@ -168,6 +168,25 @@ func TestParsePipLocation(t *testing.T) {
 	}
 }
 
+func TestDeriveAptLocation(t *testing.T) {
+	cases := []struct {
+		name  string
+		lines []string
+		want  string
+	}{
+		{"binary package", []string{"/usr", "/usr/bin", "/usr/bin/git", "/usr/bin/scalar", "/usr/share/doc/git/copyright"}, "/usr/bin"},
+		{"bindir priority", []string{"/usr/sbin", "/usr/sbin/foo", "/usr/bin", "/usr/bin/foo"}, "/usr/bin"},
+		{"shared library", []string{"/usr/lib/x86_64-linux-gnu", "/usr/lib/x86_64-linux-gnu/libssl.so.3"}, "/usr/lib/x86_64-linux-gnu"},
+		{"doc-only falls back", []string{"/usr/share/doc/foo", "/usr/share/doc/foo/copyright"}, "/var/lib/dpkg"},
+		{"empty manifest", nil, "/var/lib/dpkg"},
+	}
+	for _, tc := range cases {
+		if got := deriveAptLocation(tc.lines); got != tc.want {
+			t.Errorf("%s: deriveAptLocation = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
 func contains(s []string, v string) bool {
 	for _, x := range s {
 		if x == v {

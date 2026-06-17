@@ -236,7 +236,7 @@ meaningful paths instead of generic `system` / `local` labels.
 
 | Source | Location |
 |---|---|
-| **apt** | `/var/lib/dpkg` |
+| **apt** | primary executable dir from the dpkg manifest (e.g. `/usr/bin`), else where most files live (e.g. `/usr/lib/<arch>`) |
 | **snap** | `/snap/<name>` |
 | **pip** | site-packages path (`pip show Location:`) |
 | **npm** | `npm root -g` (global) / project dir (local) |
@@ -270,9 +270,10 @@ whatsinstalled eval --baseline r.json        # diff against a baseline
 ```text
 ┌─ whatsinstalled ── apt:90 │ snap:3 │ npm:14 ──────────── v1.0.0-beta ─┐
 │  Name         Version Src  Location        User   Size  Added  Used   │
-│  ▾ /var/lib/dpkg            [45]                                       │
-│      nginx     1.24.0  apt  /var/lib/dpkg   system 4.2M  12d    3d     │
-│      ↳ libssl  3.0.2   apt  /var/lib/dpkg   system 2.1M  12d    -      │
+│  ▾ /usr/sbin               [12]                                        │
+│      nginx     1.24.0  apt  /usr/sbin       root   4.2M  12d    3d     │
+│  ▾ /usr/bin                [45]                                        │
+│      git       2.43.0  apt  /usr/bin        root   18M   30d    1d     │
 │  ▸ /snap/core20            [3]                                         │
 │  [All] [Apt] [Snap] [Npm] [Pip] [Conda] [Bin]            /filter      │
 │  Description: nginx — web server          │  :  palette  ?  ask        │

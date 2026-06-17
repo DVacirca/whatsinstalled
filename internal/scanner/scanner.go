@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"os"
 	"os/exec"
 	"strings"
 
@@ -10,6 +11,12 @@ import (
 // commandExists reports whether a command is in PATH.
 func commandExists(name string) bool {
 	_, err := exec.LookPath(name)
+	return err == nil
+}
+
+// fileExists reports whether a regular file or directory exists at path.
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
 	return err == nil
 }
 
